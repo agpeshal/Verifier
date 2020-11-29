@@ -66,8 +66,8 @@ class Conv(nn.Module):
         self.padding = layer.padding
         self.dilation = layer.dilation
         self.kernel_size = layer.kernel_size
-        self.kernal_size_number = self.kernel_size[0] * self.kernel_size[1]
         self.out_channels = self.weight.shape[0]
+        self.in_channels = self.weight.shape[1]
 
     def forward(self, input):
         l, u = input
@@ -77,62 +77,38 @@ class Conv(nn.Module):
         width = l_.shape[-2]
         height = l_.shape[-1]
 
+        # Padding
+        l = F.pad(l, pad=(1, 1, 1, 1), mode='constant', value=0)
+        u = F.pad(u, pad=(1, 1, 1, 1), mode='constant', value=0)
 
+        bound_l = torch.zeros([self.out_channels, height, width])
+        bound_u = torch.zeros([self.out_channels, height, width])
+        weight_mask = torch.sign(self.weight)
+        weight_mask = (1 + weight_mask)/2
 
+        for outChannel in range(self.out_channels):
+            for h in range(height):
+                for w in range(width):
+                    for inChannel in range(self.in_channels):
+                        weight = self.weight[outChannel, inChannel, :, :]
+                        mask = weight_mask[outChannel, inChannel, :, :]
 
+                        value_l = l[:, inChannel, self.stride[0]*h : self.stride[0]*(h+1)+1 , self.stride[1]*w: self.stride[1]*(w+1)+1]
+                        value_u = u[:, inChannel, self.stride[0]*h : self.stride[0]*(h+1)+1 , self.stride[1]*w: self.stride[1]*(w+1)+1]
 
-        result = torch.zeros([x.shape[0] * self.out_channels, width, height], dtype=torch.float32)
+                        mask_l = value_l * mask + value_u * (1 - mask)
+                        bound_l[outChannel, h, w] += torch.sum(mask_l * weight)
 
-        for channel in range(x.shape[1]):
-            for i_convNumber in range(self.out_channels):
-                xx = torch.matmul(windows[channel], self.weight[i_convNumber][channel])
-                xx = xx.view(-1, width, height)
-                result[i_convNumber * xx.shape[0]: (i_convNumber + 1) * xx.shape[0]] += xx
+                        mask_u = value_u * mask + value_l * (1 - mask)
+                        bound_u[outChannel, h, w] += torch.sum(mask_u * weight)
 
-        result = result.view(x.shape[0], self.out_channels, width, height)
+            bound_l[outChannel, :, :] += self.bias[outChannel]
+            bound_u[outChannel, :, :] += self.bias[outChannel]
 
-        print(result.shape)
-        exit()
+        bound_l = bound_l.unsqueeze(0)
+        bound_u = bound_u.unsqueeze(0)
 
-        print(torch.sum(y - result))
-
-        exit()
-
-
-        # prepare mask from weight coefficients
-        mask = torch.sign(self.weight)
-        mask_one = (1 + mask) / 2
-        mask_one_minus = (1 - mask) / 2
-
-        print(mask_one.shape, l.shape)
-        exit()
-
-        l = l.T.repeat(1, mask.shape[1])
-        u = u.T.repeat(1, mask.shape[1])
-
-        # compute lower bound
-        mask_l = l * mask_one + u * mask_one_minus
-        bound_l = torch.sum(mask_l * self.weight, dim=0) + self.bias
-        bound_l = torch.unsqueeze(bound_l, 0)
-
-        # compute upper bound
-        mask_r = u * mask_one + l * mask_one_minus
-        bound_u = torch.sum(mask_r * self.weight, dim=0) + self.bias
-        bound_u = torch.unsqueeze(bound_u, 0)
-
-        exit()
-
-        return y
-
-    def calculateWindows(self, l, u):
-
-
-        windows = F.unfold(x, kernel_size=self.kernel_size, padding=self.padding, dilation=self.dilation, stride=self.stride)
-        print(windows.shape)
-        exit()
-        windows = windows.transpose(1, 2).contiguous().view(-1, x.shape[1], self.kernal_size_number)
-        windows = windows.transpose(0, 1)
-        return windows
+        return [bound_l, bound_u]
 
 
 class ReLU(nn.Module):
