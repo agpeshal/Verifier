@@ -20,10 +20,17 @@ class Model(nn.Module):
 
         self.true_label = true_label
         self.x_max, self.x_min = torch.clamp(x.data + eps, max=1), torch.clamp(x.data - eps, min=0)
-
+        
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05)
 
     def forward(self):
         return self.net([self.x_min, self.x_max])
+
+    def parameters(self) -> torch.Tensor:
+        # A generator to allow gradient descent on `slope` of ReLUs.
+        for layer in self.net:
+            if isinstance(layer, ReLU) and hasattr(layer, "slope"):
+                yield layer.slope
 
 
     def verify(self) -> bool:
