@@ -33,13 +33,6 @@ class Model(nn.Module):
     def forward(self):
         return self.net([self.lx, self.ux, self.lc, self.uc])
 
-    def parameters(self) -> torch.Tensor:
-        # A generator to allow gradient descent on `slope` of ReLUs.
-        for layer in self.net:
-            if isinstance(layer, ReLU) and hasattr(layer, "slope"):
-                yield layer.slope
-
-
     def verify(self):
         lx, ux, lc, uc = self.forward()
 
