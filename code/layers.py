@@ -35,10 +35,10 @@ class Flatten(nn.Module):
         lx_out = lx_in.flatten(self.start_dim, self.end_dim).squeeze()
         ux_out = ux_in.flatten(self.start_dim, self.end_dim).squeeze()
 
-        lc_out = lc_in.flatten(self.start_dim, self.end_dim).squeeze()
-        uc_out = uc_in.flatten(self.start_dim, self.end_dim).squeeze()
+        lc_out = lc_in.flatten(self.start_dim, self.end_dim)
+        uc_out = uc_in.flatten(self.start_dim, self.end_dim)
 
-        return [torch.diag(lx_out), torch.diag(ux_out), torch.diag(lc_out), torch.diag(uc_out)]
+        return [torch.diag(lx_out), torch.diag(ux_out), lc_out, uc_out]
 
 
 class Linear(nn.Module):
@@ -54,8 +54,8 @@ class Linear(nn.Module):
         mask = torch.sign(self.weight)
         mask_pos = torch.zeros_like(mask)
         mask_neg = torch.zeros_like(mask)
-        mask_pos[mask > 0] = 1
-        mask_neg[mask < 0] = 1
+        mask_pos[mask > 0] = 1.0
+        mask_neg[mask < 0] = 1.0
 
         mask_pos = mask_pos * self.weight
         mask_neg = mask_neg * self.weight
@@ -69,6 +69,24 @@ class Linear(nn.Module):
 
         lc_out = torch.mm(lc_in, mask_pos) + torch.mm(uc_in, mask_neg) + bias
         uc_out = torch.mm(uc_in, mask_pos) + torch.mm(lc_in, mask_neg) + bias
+
+        if is_verbose:
+            print('\nLINEAR:')
+            print('lx_in: ', lx_in)
+            print('ux_in: ', ux_in)
+            print('lc_in: ', lc_in)
+            print('uc_in: ', uc_in, '\n')
+
+            print('weight: ', self.weight)
+            print('bias: ', self.bias)
+
+            print('mask_pos: ', mask_pos)
+            print('mask_neg: ', mask_neg, '\n')
+
+            print('lx_out: ', lx_out)
+            print('ux_out: ', ux_out)
+            print('lc_out: ', lc_out)
+            print('uc_out: ', uc_out)
 
         return [lx_out, ux_out, lc_out, uc_out]
 
@@ -100,8 +118,8 @@ class ReLU(nn.Module):
         mask = torch.sign(lx_in)
         mask_pos = torch.zeros_like(mask)
         mask_neg = torch.zeros_like(mask)
-        mask_pos[mask > 0] = 1
-        mask_neg[mask < 0] = 1
+        mask_pos[mask > 0] = 1.0
+        mask_neg[mask < 0] = 1.0
 
         # 2. multiply input bounds with signed mask
         mask_lower = minm * mask_pos + maxm * mask_neg
@@ -114,8 +132,8 @@ class ReLU(nn.Module):
         mask = torch.sign(ux_in)
         mask_pos = torch.zeros_like(mask)
         mask_neg = torch.zeros_like(mask)
-        mask_pos[mask > 0] = 1
-        mask_neg[mask < 0] = 1
+        mask_pos[mask > 0] = 1.0
+        mask_neg[mask < 0] = 1.0
 
         # 2. multiply input bounds with signed mask
         mask_upper = maxm * mask_pos + minm * mask_neg
@@ -133,10 +151,11 @@ class ReLU(nn.Module):
         # Strictly negative
         idx = torch.where(u <= 0)[0]
         if len(idx) > 0:
-            lx_out[:, idx] = 0
-            ux_out[:, idx] = 0
-            lc_out[:, idx] = 0
-            uc_out[:, idx] = 0
+            lx_out[:, idx] = 0.0
+            ux_out[:, idx] = 0.0
+            lc_out[:, idx] = 0.0
+            uc_out[:, idx] = 0.0
+        strictly_negative_count = len(idx)
 
         # Strictly positive
         idx = torch.where(l >= 0)[0]
@@ -145,34 +164,55 @@ class ReLU(nn.Module):
             ux_out[:, idx] = ux_in[:, idx]
             lc_out[:, idx] = lc_in[:, idx]
             uc_out[:, idx] = uc_in[:, idx]
+        strictly_positive_count = len(idx)
 
         # Crossing ReLU
         idx = torch.where((l < 0) & (u > 0))[0]
         if len(idx) > 0:
             # lower bound
-            lx_out[:, idx] = 0
-            lc_out[:, idx] = 0
+            lx_out[:, idx] = 0.0
+            lc_out[:, idx] = 0.0
 
             # upper bound
             if not is_trainable:
                 slope[idx] = u[idx] / (u[idx] - l[idx])
+                print(slope[idx])
                 ux_out[:, idx] = slope[idx] * ux_in[:, idx]
                 uc_out[:, idx] = slope[idx] * uc_in[:, idx] - slope[idx] * l[idx]
             else:
                 print('TODO')
                 exit()
+        crossing_count = len(idx)
+
+        if is_verbose:
+            print('\nLINEAR:')
+            print('lx_in: ', lx_in)
+            print('ux_in: ', ux_in)
+            print('lc_in: ', lc_in)
+            print('uc_in: ', uc_in, '\n')
+
+            print('strictly negative count: ', strictly_negative_count)
+            print('strictly positive count: ', strictly_positive_count)
+            print('crossing count: ', crossing_count, '\n')
+
+            print('lx_out: ', lx_out)
+            print('ux_out: ', ux_out)
+            print('lc_out: ', lc_out)
+            print('uc_out: ', uc_out)
 
         return [lx_out, ux_out, lc_out, uc_out]
 
 
-def initialize_properties(input, trainable):
+def initialize_properties(input, trainable=False, verbose=False):
     global x_min
     global x_max
     global is_trainable
+    global is_verbose
 
     x_min = input[0].flatten(1, -1)
     x_max = input[1].flatten(1, -1)
     is_trainable = trainable
+    is_verbose = verbose
 
 
 def modLayer(layer):

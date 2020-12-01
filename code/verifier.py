@@ -9,7 +9,7 @@ DEVICE = 'cpu'
 INPUT_SIZE = 28
 
 
-parser = argparse.ArgumentParser(description='Neural network verification using DeepZ relaxation')
+parser = argparse.ArgumentParser(description='Neural network verification using DeepPoly relaxation')
 parser.add_argument('--net',
                     type=str,
                     choices=['fc1', 'fc2', 'fc3', 'fc4', 'fc5', 'fc6', 'fc7', 'conv1', 'conv2', 'conv3'],
