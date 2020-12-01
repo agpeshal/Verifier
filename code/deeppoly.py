@@ -59,9 +59,10 @@ class Model(nn.Module):
                 mask_neg[mask < 0] = 1
 
                 mask_lower = x_min * mask_pos + x_max * mask_neg
-                l = torch.sum(mask_lower * diff_x + diff_c)
+                l = torch.sum(mask_lower * diff_x) + diff_c
 
                 if l < 0:
+                    print(l)
                     print('not verified')
                     exit()
 
