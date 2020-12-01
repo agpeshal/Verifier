@@ -13,8 +13,14 @@ class Normalization(nn.Module):
         super().__init__()
 
     def forward(self, input):
-        l, u = input
-        return [(l - 0.1307)/0.3081, (u - 0.1307)/0.3081]
+        lx_in, ux_in, lc_in, uc_in = input
+
+        lx_out = lx_in * 1/0.3081
+        ux_out = ux_in * 1/0.3081
+        lc_out = lc_in - 0.1307
+        uc_out = uc_in - 0.1307
+
+        return [lx_out, ux_out, lc_out, uc_out]
 
 
 class Flatten(nn.Module):
@@ -24,8 +30,15 @@ class Flatten(nn.Module):
         self.end_dim = layer.end_dim
 
     def forward(self, input):
-        l, u = input
-        return [l.flatten(self.start_dim, self.end_dim), u.flatten(self.start_dim, self.end_dim)]
+        lx_in, ux_in, lc_in, uc_in = input
+
+        lx_out = lx_in.flatten(self.start_dim, self.end_dim).squeeze()
+        ux_out = ux_in.flatten(self.start_dim, self.end_dim).squeeze()
+
+        lc_out = lc_in.flatten(self.start_dim, self.end_dim).squeeze()
+        uc_out = uc_in.flatten(self.start_dim, self.end_dim).squeeze()
+
+        return [torch.diag(lx_out), torch.diag(ux_out), torch.diag(lc_out), torch.diag(uc_out)]
 
 
 class Linear(nn.Module):
@@ -35,80 +48,29 @@ class Linear(nn.Module):
         self.bias = layer.bias.data
 
     def forward(self, input):
-        l, u = input
+        lx_in, ux_in, lc_in, uc_in = input
 
-        # prepare mask from weight coefficients
+        # prepare signed mask from weight
         mask = torch.sign(self.weight)
-        mask = (1 + mask)/2
+        mask_pos = torch.zeros_like(mask)
+        mask_neg = torch.zeros_like(mask)
+        mask_pos[mask > 0] = 1
+        mask_neg[mask < 0] = 1
 
-        l = l.T.repeat(1, mask.shape[1])
-        u = u.T.repeat(1, mask.shape[1])
+        mask_pos = mask_pos * self.weight
+        mask_neg = mask_neg * self.weight
 
-        # compute lower bound
-        mask_l = l * mask + u * (1 - mask)
-        bound_l = torch.sum(mask_l * self.weight, dim=0) + self.bias
-        bound_l = torch.unsqueeze(bound_l, 0)
+        # compute lx_out, ux_out
+        lx_out = torch.mm(lx_in, mask_pos) + torch.mm(ux_in, mask_neg)
+        ux_out = torch.mm(ux_in, mask_pos) + torch.mm(lx_in, mask_neg)
 
-        # compute upper bound
-        mask_u = u * mask + l * (1 - mask)
-        bound_u = torch.sum(mask_u * self.weight, dim=0) + self.bias
-        bound_u = torch.unsqueeze(bound_u, 0)
+        # compute lc_out, uc_out
+        bias = self.bias.unsqueeze(0)
 
-        return [bound_l, bound_u]
+        lc_out = torch.mm(lc_in, mask_pos) + torch.mm(uc_in, mask_neg) + bias
+        uc_out = torch.mm(uc_in, mask_pos) + torch.mm(lc_in, mask_neg) + bias
 
-
-class Conv(nn.Module):
-    def __init__(self, layer: nn.Module):
-        super().__init__()
-        self.weight = layer.weight.data
-        self.bias = layer.bias.data
-        self.stride = layer.stride
-        self.padding = layer.padding
-        self.dilation = layer.dilation
-        self.kernel_size = layer.kernel_size
-        self.out_channels = self.weight.shape[0]
-        self.in_channels = self.weight.shape[1]
-
-    def forward(self, input):
-        l, u = input
-
-        # get dimensions
-        l_ = F.conv2d(l, self.weight, None, self.stride, self.padding)
-        width = l_.shape[-2]
-        height = l_.shape[-1]
-
-        # Padding
-        l = F.pad(l, pad=(1, 1, 1, 1), mode='constant', value=0)
-        u = F.pad(u, pad=(1, 1, 1, 1), mode='constant', value=0)
-
-        bound_l = torch.zeros([self.out_channels, height, width])
-        bound_u = torch.zeros([self.out_channels, height, width])
-        weight_mask = torch.sign(self.weight)
-        weight_mask = (1 + weight_mask)/2
-
-        for outChannel in range(self.out_channels):
-            for h in range(height):
-                for w in range(width):
-                    for inChannel in range(self.in_channels):
-                        weight = self.weight[outChannel, inChannel, :, :]
-                        mask = weight_mask[outChannel, inChannel, :, :]
-
-                        value_l = l[:, inChannel, self.stride[0]*h : self.stride[0]*(h+1)+1 , self.stride[1]*w: self.stride[1]*(w+1)+1]
-                        value_u = u[:, inChannel, self.stride[0]*h : self.stride[0]*(h+1)+1 , self.stride[1]*w: self.stride[1]*(w+1)+1]
-
-                        mask_l = value_l * mask + value_u * (1 - mask)
-                        bound_l[outChannel, h, w] += torch.sum(mask_l * weight)
-
-                        mask_u = value_u * mask + value_l * (1 - mask)
-                        bound_u[outChannel, h, w] += torch.sum(mask_u * weight)
-
-            bound_l[outChannel, :, :] += self.bias[outChannel]
-            bound_u[outChannel, :, :] += self.bias[outChannel]
-
-        bound_l = bound_l.unsqueeze(0)
-        bound_u = bound_u.unsqueeze(0)
-
-        return [bound_l, bound_u]
+        return [lx_out, ux_out, lc_out, uc_out]
 
 
 class ReLU(nn.Module):
@@ -128,49 +90,94 @@ class ReLU(nn.Module):
         super().__init__()
 
     def forward(self, input):
-        l, u = input
+        lx_in, ux_in, lc_in, uc_in = input
 
-        bound_l = torch.ones_like(l) * float('inf')
-        bound_u = torch.ones_like(u) * float('inf')
+        minm = x_min.T.repeat(1, lx_in.shape[1])
+        maxm = x_max.T.repeat(1, ux_in.shape[1])
+
+        ##### compute l for each neuron by inserting bounds on input x: [x_min, x_max]
+        # 1. prepare signed mask from lx_in
+        mask = torch.sign(lx_in)
+        mask_pos = torch.zeros_like(mask)
+        mask_neg = torch.zeros_like(mask)
+        mask_pos[mask > 0] = 1
+        mask_neg[mask < 0] = 1
+
+        # 2. multiply input bounds with signed mask
+        mask_lower = minm * mask_pos + maxm * mask_neg
+
+        # 3. computing l using accumulated weights and coefficients
+        l = torch.sum(mask_lower * lx_in + lc_in, dim=0)
+
+        ##### compute u for each neuron by inserting bounds on input x: [x_min, x_max]
+        # 1. prepare signed mask from lx_in
+        mask = torch.sign(ux_in)
+        mask_pos = torch.zeros_like(mask)
+        mask_neg = torch.zeros_like(mask)
+        mask_pos[mask > 0] = 1
+        mask_neg[mask < 0] = 1
+
+        # 2. multiply input bounds with signed mask
+        mask_upper = maxm * mask_pos + minm * mask_neg
+
+        # 3. computing u using accumulated weights and coefficients
+        u = torch.sum(mask_upper * ux_in + uc_in, dim=0)
+
+        ##### evaluate ReLU conditions
+        lx_out = torch.ones_like(lx_in) * float('-inf')
+        ux_out = torch.ones_like(ux_in) * float('inf')
+        lc_out = torch.zeros_like(lc_in)
+        uc_out = torch.zeros_like(uc_in)
         slope = torch.ones_like(l) * float('inf')
 
         # Strictly negative
-        idx = torch.where(u <= 0)
-        if len(idx[0]) > 0:
-            bound_l[idx] = 0
-            bound_u[idx] = 0
+        idx = torch.where(u <= 0)[0]
+        if len(idx) > 0:
+            lx_out[:, idx] = 0
+            ux_out[:, idx] = 0
+            lc_out[:, idx] = 0
+            uc_out[:, idx] = 0
 
         # Strictly positive
-        idx = torch.where(l >= 0)
-        if len(idx[0]) > 0:
-            bound_l[idx] = l[idx]
-            bound_u[idx] = u[idx]
+        idx = torch.where(l >= 0)[0]
+        if len(idx) > 0:
+            lx_out[:, idx] = lx_in[:, idx]
+            ux_out[:, idx] = ux_in[:, idx]
+            lc_out[:, idx] = lc_in[:, idx]
+            uc_out[:, idx] = uc_in[:, idx]
 
         # Crossing ReLU
-        idx = torch.where((l < 0) & (u > 0))
-        if len(idx[0]) > 0:
+        idx = torch.where((l < 0) & (u > 0))[0]
+        if len(idx) > 0:
             # lower bound
-            bound_l[idx] = 0
+            lx_out[:, idx] = 0
+            lc_out[:, idx] = 0
 
             # upper bound
-            if not trainable:
-                slope[idx] = u[idx]/ (u[idx] - l[idx])
+            if not is_trainable:
+                slope[idx] = u[idx] / (u[idx] - l[idx])
+                ux_out[:, idx] = slope[idx] * ux_in[:, idx]
+                uc_out[:, idx] = slope[idx] * uc_in[:, idx] - slope[idx] * l[idx]
             else:
                 print('TODO')
                 exit()
-            bound_u[idx] = slope[idx] * u[idx] - slope[idx] * l[idx]
 
-        return [bound_l, bound_u]
+        return [lx_out, ux_out, lc_out, uc_out]
 
 
-def modLayer(layer, trainable_=False):
-    global trainable
-    trainable = trainable_
+def initialize_properties(input, trainable):
+    global x_min
+    global x_max
+    global is_trainable
 
+    x_min = input[0].flatten(1, -1)
+    x_max = input[1].flatten(1, -1)
+    is_trainable = trainable
+
+
+def modLayer(layer):
     layer_name = layer.__class__.__name__
-    modified_layers = {"Normalization": Normalization, "Flatten": Flatten, "Linear": Linear, "Conv2d": Conv, "ReLU": ReLU}
-
-    print(layer_name)
+    modified_layers = {"Normalization": Normalization, "Flatten": Flatten, "Linear": Linear, "ReLU": ReLU}
 
     if layer_name not in modified_layers:
         return copy.deepcopy(layer)

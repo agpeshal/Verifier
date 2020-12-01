@@ -33,15 +33,6 @@ def analyze(net, inputs, eps, true_label):
 
     exit()
 
-    '''
-    logger.debug(f"[+] True label: {true_label}, Epsilon: {eps}")
-    logger.debug(f"Base predictions: {base_pred[0]}")
-    while not model.verify():
-        model.updateParams()
-    return True
-
-    return 0
-    #'''
 
 
 def main():
