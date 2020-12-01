@@ -13,9 +13,9 @@ parser = argparse.ArgumentParser(description='Neural network verification using 
 parser.add_argument('--net',
                     type=str,
                     choices=['fc1', 'fc2', 'fc3', 'fc4', 'fc5', 'fc6', 'fc7', 'conv1', 'conv2', 'conv3'],
-                    required=True,
+                    required=False,
                     help='Neural network architecture which is supposed to be verified.')
-parser.add_argument('--spec', type=str, required=True, help='Test case to verify.')
+parser.add_argument('--spec', type=str, required=False, help='Test case to verify.')
 parser.add_argument('--debug', default=True, required=False, help='Flag to enable debug.')
 args = parser.parse_args()
 
@@ -37,7 +37,8 @@ def analyze(net, inputs, eps, true_label):
 
 def main():
 
-
+    # args.net = 'fc6'
+    # args.spec = 'test_cases/fc6/img0_0.05000.txt'
     with open(args.spec, 'r') as f:
         lines = [line[:-1] for line in f.readlines()]
         true_label = int(lines[0])
