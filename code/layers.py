@@ -176,7 +176,7 @@ class ReLU(nn.Module):
             # upper bound
             if not is_trainable:
                 slope[idx] = u[idx] / (u[idx] - l[idx])
-                print(slope[idx])
+                # print(slope[idx])
                 ux_out[:, idx] = slope[idx] * ux_in[:, idx]
                 uc_out[:, idx] = slope[idx] * uc_in[:, idx] - slope[idx] * l[idx]
             else:
