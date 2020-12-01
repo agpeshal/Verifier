@@ -125,7 +125,7 @@ class ReLU(nn.Module):
         mask_lower = minm * mask_pos + maxm * mask_neg
 
         # 3. computing l using accumulated weights and coefficients
-        l = torch.sum(mask_lower * lx_in + lc_in, dim=0)
+        l = torch.sum(mask_lower * lx_in, dim=0) + lc_in.squeeze(0)
 
         ##### compute u for each neuron by inserting bounds on input x: [x_min, x_max]
         # 1. prepare signed mask from lx_in
@@ -139,7 +139,7 @@ class ReLU(nn.Module):
         mask_upper = maxm * mask_pos + minm * mask_neg
 
         # 3. computing u using accumulated weights and coefficients
-        u = torch.sum(mask_upper * ux_in + uc_in, dim=0)
+        u = torch.sum(mask_upper * ux_in , dim=0) + uc_in.squeeze(0)
 
         ##### evaluate ReLU conditions
         lx_out = torch.ones_like(lx_in) * float('-inf')
