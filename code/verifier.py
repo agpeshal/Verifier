@@ -67,6 +67,10 @@ def main():
     else:
         assert False
 
+    if 'conv' in args.net:
+        print("not verified")
+        exit()
+
     net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
 
     inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
