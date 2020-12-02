@@ -185,7 +185,7 @@ class ReLU(nn.Module):
             # uc_out[:, idx] = self.slope[idx] * uc_in[:, idx] - self.slope[idx] * l[idx]
             ux_out[:, idx] = slope[idx] * ux_in[:, idx]
             uc_out[:, idx] = slope[idx] * uc_in[:, idx] - slope[idx] * l[idx]
-            print(slope[idx])
+            # print(slope[idx])
             
         crossing_count = len(idx)
 

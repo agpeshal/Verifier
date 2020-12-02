@@ -36,7 +36,7 @@ def analyze(net, inputs, eps, true_label):
     while not model.verify() and count < 50:
         model.updateParams()
         count += 1
-        
+    print(model.lb)
     return model.verify()
     
 
@@ -44,8 +44,8 @@ def analyze(net, inputs, eps, true_label):
 
 def main():
 
-    args.net = 'fc2'
-    args.spec = 'test_cases/fc2/img1_0.07100.txt'
+    # args.net = 'fc2'
+    # args.spec = 'test_cases/fc2/img1_0.07100.txt'
     with open(args.spec, 'r') as f:
         lines = [line[:-1] for line in f.readlines()]
         true_label = int(lines[0])
@@ -79,8 +79,8 @@ def main():
         print("not verified")
         exit()
 
-    # net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
-    net.load_state_dict(torch.load('mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
+    net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
+    # net.load_state_dict(torch.load('mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
 
     inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
     outs = net(inputs)
