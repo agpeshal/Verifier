@@ -4,10 +4,12 @@ from networks import FullyConnected, Conv
 
 import logging
 import deeppoly
+import warnings
 
 DEVICE = 'cpu'
 INPUT_SIZE = 28
 
+warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='Neural network verification using DeepPoly relaxation')
 parser.add_argument('--net',
@@ -29,16 +31,20 @@ def analyze(net, inputs, eps, true_label):
     model = deeppoly.Model(net, eps=eps, x=inputs, true_label=true_label)
     del net
 
-    model.verify()
-
-    exit()
+    count = 0
+    while not model.verify() and count < 50:
+        model.updateParams()
+        count += 1
+        
+    return model.verify()
+    
 
 
 
 def main():
 
-    # args.net = 'fc6'
-    # args.spec = 'test_cases/fc6/img0_0.05000.txt'
+    args.net = 'fc2'
+    args.spec = 'test_cases/fc2/img1_0.07100.txt'
     with open(args.spec, 'r') as f:
         lines = [line[:-1] for line in f.readlines()]
         true_label = int(lines[0])
@@ -72,7 +78,8 @@ def main():
         print("not verified")
         exit()
 
-    net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
+    # net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
+    net.load_state_dict(torch.load('mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
 
     inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
     outs = net(inputs)

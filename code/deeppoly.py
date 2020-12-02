@@ -2,7 +2,7 @@ import logging
 import torch
 import torch.nn as nn
 
-from layers import *
+from layers import initialize_properties, modLayer, ReLU
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -29,18 +29,32 @@ class Model(nn.Module):
         self.uc = torch.zeros_like(x)                   # relational uppper bound coefficient
 
         self.true_label = true_label
+        self.forward()
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05)
 
     def forward(self):
         return self.net([self.lx, self.ux, self.lc, self.uc])
 
+    def parameters(self) -> torch.Tensor:
+        for layer in self.net:
+            if isinstance(layer, ReLU) and hasattr(layer, "slope"):
+                yield layer.slope
+    
+    def updateParams(self):
+        # Calculates the gradient of `loss` wrt to ReLU slopes.
+        loss = -self.lb.sum()
+        self.optimizer.zero_grad()
+        loss.backward(retain_graph=True)
+        self.optimizer.step()
+    
     def verify(self):
         lx, ux, lc, uc = self.forward()
-
         x_min = self.x_min.flatten(1, -1).squeeze()
         x_max = self.x_max.flatten(1, -1).squeeze()
 
         correct_lx = lx[:, self.true_label]
         correct_lc = lc[:, self.true_label]
+        self.lb = torch.zeros(NUM_CLASSES)
 
         for label in range(NUM_CLASSES):
             if label != self.true_label:
@@ -60,14 +74,13 @@ class Model(nn.Module):
 
                 mask_lower = x_min * mask_pos + x_max * mask_neg
                 l = torch.sum(mask_lower * diff_x) + diff_c
-
-                if l < 0:
-                    print(l)
-                    print('not verified')
-                    exit()
-
-        print('verified')
-
+                self.lb[label] = l
+        
+        if torch.any(self.lb < 0):
+            return False
+        
+        return True
+        
 
 
 

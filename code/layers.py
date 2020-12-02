@@ -146,7 +146,7 @@ class ReLU(nn.Module):
         ux_out = torch.ones_like(ux_in) * float('inf')
         lc_out = torch.zeros_like(lc_in)
         uc_out = torch.zeros_like(uc_in)
-        slope = torch.ones_like(l) * float('inf')
+        slope = torch.ones_like(l)
 
         # Strictly negative
         idx = torch.where(u <= 0)[0]
@@ -174,14 +174,19 @@ class ReLU(nn.Module):
             lc_out[:, idx] = 0.0
 
             # upper bound
-            if not is_trainable:
+            if not hasattr(self, "slope"):
                 slope[idx] = u[idx] / (u[idx] - l[idx])
-                # print(slope[idx])
-                ux_out[:, idx] = slope[idx] * ux_in[:, idx]
-                uc_out[:, idx] = slope[idx] * uc_in[:, idx] - slope[idx] * l[idx]
-            else:
-                print('TODO')
-                exit()
+                self.slope = Variable(torch.clamp(slope, 0, 1), requires_grad=True)
+                self.slope.retain_grad()
+            # torch.clamp_(self.slope, 0, 1)
+            # print(self.slope[idx])
+            slope = torch.clamp(self.slope, 0, 1)
+            # ux_out[:, idx] = self.slope[idx] * ux_in[:, idx]
+            # uc_out[:, idx] = self.slope[idx] * uc_in[:, idx] - self.slope[idx] * l[idx]
+            ux_out[:, idx] = slope[idx] * ux_in[:, idx]
+            uc_out[:, idx] = slope[idx] * uc_in[:, idx] - slope[idx] * l[idx]
+            print(slope[idx])
+            
         crossing_count = len(idx)
 
         if is_verbose:
