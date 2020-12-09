@@ -3,8 +3,11 @@ import torch
 from networks import FullyConnected, Conv
 
 import logging
-import deeppoly
+import deeppoly_fc
+import deeppoly_conv
 import warnings
+
+from torchsummary import summary
 
 DEVICE = 'cpu'
 INPUT_SIZE = 28
@@ -29,23 +32,25 @@ logger = logging.getLogger(__name__)
 
 def analyze(net, inputs, eps, true_label):
     base_pred = net(inputs)     # logits
-    model = deeppoly.Model(net, eps=eps, x=inputs, true_label=true_label)
+
+    if 'fc' in args.net:
+        model = deeppoly_fc.Model(net, eps=eps, x=inputs, true_label=true_label)
+    else:
+        model = deeppoly_conv.Model(net, eps=eps, x=inputs, true_label=true_label)
+
     del net
 
     count = 0
     while not model.verify() and count < 50:
+        print('\nCOUNT: ', count)
         model.updateParams()
         count += 1
     print(model.lb)
     return model.verify()
-    
-
 
 
 def main():
 
-    # args.net = 'fc2'
-    # args.spec = 'test_cases/fc2/img1_0.07100.txt'
     with open(args.spec, 'r') as f:
         lines = [line[:-1] for line in f.readlines()]
         true_label = int(lines[0])
@@ -75,12 +80,10 @@ def main():
     else:
         assert False
 
-    if 'conv' in args.net:
-        print("not verified")
-        exit()
 
     net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
-    # net.load_state_dict(torch.load('mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
+
+    summary(net, input_size=(1, 28, 28))
 
     inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
     outs = net(inputs)
