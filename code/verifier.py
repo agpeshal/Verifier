@@ -1,13 +1,12 @@
 import argparse
 import torch
 from networks import FullyConnected, Conv
+import time
 
 import logging
 import deeppoly_fc
 import deeppoly_conv
 import warnings
-
-from torchsummary import summary
 
 DEVICE = 'cpu'
 INPUT_SIZE = 28
@@ -31,32 +30,35 @@ logger = logging.getLogger(__name__)
 
 
 def analyze(net, inputs, eps, true_label):
-    base_pred = net(inputs)     # logits
-
+    start_time = time.time()
+    print('Initialization ...')
     if 'fc' in args.net:
         model = deeppoly_fc.Model(net, eps=eps, x=inputs, true_label=true_label)
     else:
         model = deeppoly_conv.Model(net, eps=eps, x=inputs, true_label=true_label)
-
     del net
+    print('initialization: time=', round(time.time() - start_time, 4))
 
-    count = 0
-    while not model.verify() and count < 50:
-        print('\nCOUNT: ', count)
-        model.updateParams()
-        count += 1
-    print(model.lb)
-    return model.verify()
+    iter = 1
+    while iter <= 50:
+        print('\nIteration: ', iter)
+        start_time = time.time()
+        is_verified = model.verify()
+        print('verification: time=', round(time.time() -  start_time,  4))
+
+        if is_verified:
+            return True
+        else:
+            start_time = time.time()
+            model.updateParams()
+            print('update param: time=', round(time.time() - start_time, 4))
+            iter += 1
+
+    return False
 
 
 def main():
-
-    with open(args.spec, 'r') as f:
-        lines = [line[:-1] for line in f.readlines()]
-        true_label = int(lines[0])
-        pixel_values = [float(line) for line in lines[1:]]
-        eps = float(args.spec[:-4].split('/')[-1].split('_')[-1])
-
+    # Load network
     if args.net == 'fc1':
         net = FullyConnected(DEVICE, INPUT_SIZE, [50, 10]).to(DEVICE)
     elif args.net == 'fc2':
@@ -79,21 +81,30 @@ def main():
         net = Conv(DEVICE, INPUT_SIZE, [(16, 4, 2, 1), (64, 4, 2, 1)], [100, 100, 10], 10).to(DEVICE)
     else:
         assert False
-
-
     net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
 
-    summary(net, input_size=(1, 28, 28))
+    # Load image
+    with open(args.spec, 'r') as f:
+        lines = [line[:-1] for line in f.readlines()]
+        true_label = int(lines[0])
+        pixel_values = [float(line) for line in lines[1:]]
+        eps = float(args.spec[:-4].split('/')[-1].split('_')[-1])
 
     inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label
 
-    if analyze(net, inputs, eps, true_label):
+    # Test verification
+    total_time = time.time()
+    is_verified = analyze(net, inputs, eps, true_label)
+
+    print('\n\nResult:')
+    if is_verified:
         print('verified')
     else:
         print('not verified')
+    print('Total time=', round(time.time() - total_time, 4), 's\n')
 
 
 if __name__ == '__main__':

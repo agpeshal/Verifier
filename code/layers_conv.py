@@ -14,6 +14,7 @@ class Normalization(nn.Module):
         super().__init__()
 
     def forward(self, input):
+        start_time = time.time()
         lx_in, ux_in, lc_in, uc_in = input
 
         lx_out = lx_in * 1/0.3081
@@ -21,7 +22,7 @@ class Normalization(nn.Module):
         lc_out = lc_in - 0.1307
         uc_out = uc_in - 0.1307
 
-        print('Normalization: time=', round(time.time() - start_time, 4))
+        if is_verbose: print('Normalization: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -133,7 +134,7 @@ class Conv2D(nn.Module):
             lc_out[outChannel] += self.bias[outChannel]
             uc_out[outChannel] += self.bias[outChannel]
 
-        print('Conv2D: time=', round(time.time() - start_time, 4))
+        if is_verbose: print('Conv2D: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -191,14 +192,12 @@ class ReLU_Conv(nn.Module):
         # 3. computing l using accumulated weights and coefficients
         u = torch.sum(mask_upper * ux_in, dim=(-2, -1)) + uc_in
 
-        # define lx_out, ux_out, lc_out, uc_out
+        # define lx_out, ux_out, lc_out, uc_out, slope
         lx_out = torch.zeros_like(lx_in)
         ux_out = torch.zeros_like(ux_in)
         lc_out = torch.zeros_like(lc_in)
         uc_out = torch.zeros_like(uc_in)
-
-        # ask peshal
-        slope = torch.ones_like(l)
+        slope = torch.ones_like(l)  # ask peshal
 
         ##### evaluate ReLU conditions
         # Strictly negative
@@ -234,7 +233,7 @@ class ReLU_Conv(nn.Module):
             ux_out[idx] = torch.einsum('a,abc->abc', slope[idx], ux_in[idx])
             uc_out[idx] = slope[idx] * uc_in[idx] - slope[idx] * l[idx]
 
-        print('ReLU Conv: time=', round(time.time() - start_time, 4))
+        if is_verbose: print('ReLU Conv: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -305,7 +304,6 @@ class ReLU_Linear(nn.Module):
             ux_out[:, idx] = 0.0
             lc_out[:, idx] = 0.0
             uc_out[:, idx] = 0.0
-        strictly_negative_count = len(idx)
 
         # Strictly positive
         idx = torch.where(l >= 0)[0]
@@ -314,7 +312,6 @@ class ReLU_Linear(nn.Module):
             ux_out[:, idx] = ux_in[:, idx]
             lc_out[:, idx] = lc_in[:, idx]
             uc_out[:, idx] = uc_in[:, idx]
-        strictly_positive_count = len(idx)
 
         # Crossing ReLU
         idx = torch.where((l < 0) & (u > 0))[0]
@@ -332,9 +329,7 @@ class ReLU_Linear(nn.Module):
             ux_out[:, idx] = slope[idx] * ux_in[:, idx]
             uc_out[:, idx] = slope[idx] * uc_in[:, idx] - slope[idx] * l[idx]
 
-        crossing_count = len(idx)
-
-        print('ReLU Linear: time=', round(time.time() - start_time, 4))
+        if is_verbose: print('ReLU Linear: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -357,7 +352,7 @@ class Flatten(nn.Module):
         lc_out = lc_in.flatten().unsqueeze(0)
         uc_out = uc_in.flatten().unsqueeze(0)
 
-        print('Flatten: time=', round(time.time() - start_time, 4))
+        if is_verbose: print('Flatten: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -390,7 +385,7 @@ class Linear(nn.Module):
         lc_out = torch.mm(lc_in, mask_pos) + torch.mm(uc_in, mask_neg) + bias
         uc_out = torch.mm(uc_in, mask_pos) + torch.mm(lc_in, mask_neg) + bias
 
-        print('Linear: time=', round(time.time() - start_time, 4))
+        if is_verbose: print('Linear: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -424,8 +419,6 @@ def modLayer(layer_prev, layer_cur):
                        'ReLU_Linear': ReLU_Linear,
                        'ReLU_Conv': ReLU_Conv,
                        'Conv2d': Conv2D}
-
-    print(layer_name)
 
     if layer_name not in modified_layers:
         return copy.deepcopy(layer_cur)

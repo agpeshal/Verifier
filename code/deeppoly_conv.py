@@ -1,6 +1,7 @@
 import logging
 import torch
 import torch.nn as nn
+import time
 
 from layers_conv import initialize_properties, modLayer, ReLU_Conv, ReLU_Linear
 
@@ -50,16 +51,23 @@ class Model(nn.Module):
 
     def parameters(self) -> torch.Tensor:
         for layer in self.net:
-            # Check with Peshal
             if (isinstance(layer, ReLU_Conv) or isinstance(layer, ReLU_Linear)) and hasattr(layer, "slope"):
                 yield layer.slope
     
     def updateParams(self):
         # Calculates the gradient of `loss` wrt to ReLU slopes.
+        #start_time =  time.time()
         loss = -self.lb.sum()
+        #print('loss: time=', round(time.time() -  start_time, 4))
+
         self.optimizer.zero_grad()
+        #print('optimizer: time=', round(time.time() - start_time, 4))
+
         loss.backward(retain_graph=True)
+        #print('backward: time=', round(time.time() - start_time, 4))
+
         self.optimizer.step()
+        #print('step: time=', round(time.time() - start_time, 4))
     
     def verify(self):
         lx, ux, lc, uc = self.forward()
@@ -89,7 +97,7 @@ class Model(nn.Module):
                 mask_lower = x_min * mask_pos + x_max * mask_neg
                 l = torch.sum(mask_lower * diff_x) + diff_c
                 self.lb[label] = l
-        
+
         if torch.any(self.lb < 0):
             return False
         

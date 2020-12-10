@@ -75,12 +75,12 @@ class Model(nn.Module):
                 mask_lower = x_min * mask_pos + x_max * mask_neg
                 l = torch.sum(mask_lower * diff_x) + diff_c
                 self.lb[label] = l
-        
+
         if torch.any(self.lb < 0):
             return False
-        
+
         return True
-        
+
 
 
 

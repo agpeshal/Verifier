@@ -1,8 +1,8 @@
 import copy
+import time
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.autograd import Variable
 
 torch.autograd.set_detect_anomaly(True)
@@ -13,6 +13,7 @@ class Normalization(nn.Module):
         super().__init__()
 
     def forward(self, input):
+        start_time = time.time()
         lx_in, ux_in, lc_in, uc_in = input
 
         lx_out = lx_in * 1/0.3081
@@ -20,6 +21,7 @@ class Normalization(nn.Module):
         lc_out = lc_in - 0.1307
         uc_out = uc_in - 0.1307
 
+        if is_verbose: print('Normalization: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -38,6 +40,7 @@ class Flatten(nn.Module):
         lc_out = lc_in.flatten(self.start_dim, self.end_dim)
         uc_out = uc_in.flatten(self.start_dim, self.end_dim)
 
+        if is_verbose: print('Flatten: time=', round(time.time() - start_time, 4))
         return [torch.diag(lx_out), torch.diag(ux_out), lc_out, uc_out]
 
 
@@ -70,24 +73,7 @@ class Linear(nn.Module):
         lc_out = torch.mm(lc_in, mask_pos) + torch.mm(uc_in, mask_neg) + bias
         uc_out = torch.mm(uc_in, mask_pos) + torch.mm(lc_in, mask_neg) + bias
 
-        if is_verbose:
-            print('\nLINEAR:')
-            print('lx_in: ', lx_in)
-            print('ux_in: ', ux_in)
-            print('lc_in: ', lc_in)
-            print('uc_in: ', uc_in, '\n')
-
-            print('weight: ', self.weight)
-            print('bias: ', self.bias)
-
-            print('mask_pos: ', mask_pos)
-            print('mask_neg: ', mask_neg, '\n')
-
-            print('lx_out: ', lx_out)
-            print('ux_out: ', ux_out)
-            print('lc_out: ', lc_out)
-            print('uc_out: ', uc_out)
-
+        if is_verbose: print('Linear: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -141,13 +127,14 @@ class ReLU(nn.Module):
         # 3. computing u using accumulated weights and coefficients
         u = torch.sum(mask_upper * ux_in , dim=0) + uc_in.squeeze(0)
 
-        ##### evaluate ReLU conditions
+        # define lx_out, ux_out, lc_out, uc_out, slope
         lx_out = torch.ones_like(lx_in) * float('-inf')
         ux_out = torch.ones_like(ux_in) * float('inf')
         lc_out = torch.zeros_like(lc_in)
         uc_out = torch.zeros_like(uc_in)
         slope = torch.ones_like(l)
 
+        ##### evaluate ReLU conditions
         # Strictly negative
         idx = torch.where(u <= 0)[0]
         if len(idx) > 0:
@@ -155,7 +142,6 @@ class ReLU(nn.Module):
             ux_out[:, idx] = 0.0
             lc_out[:, idx] = 0.0
             uc_out[:, idx] = 0.0
-        strictly_negative_count = len(idx)
 
         # Strictly positive
         idx = torch.where(l >= 0)[0]
@@ -164,7 +150,6 @@ class ReLU(nn.Module):
             ux_out[:, idx] = ux_in[:, idx]
             lc_out[:, idx] = lc_in[:, idx]
             uc_out[:, idx] = uc_in[:, idx]
-        strictly_positive_count = len(idx)
 
         # Crossing ReLU
         idx = torch.where((l < 0) & (u > 0))[0]
@@ -178,33 +163,12 @@ class ReLU(nn.Module):
                 slope[idx] = u[idx] / (u[idx] - l[idx])
                 self.slope = Variable(torch.clamp(slope, 0, 1), requires_grad=True)
                 self.slope.retain_grad()
-            # torch.clamp_(self.slope, 0, 1)
-            # print(self.slope[idx])
+
             slope = torch.clamp(self.slope, 0, 1)
-            # ux_out[:, idx] = self.slope[idx] * ux_in[:, idx]
-            # uc_out[:, idx] = self.slope[idx] * uc_in[:, idx] - self.slope[idx] * l[idx]
             ux_out[:, idx] = slope[idx] * ux_in[:, idx]
             uc_out[:, idx] = slope[idx] * uc_in[:, idx] - slope[idx] * l[idx]
-            # print(slope[idx])
-            
-        crossing_count = len(idx)
 
-        if is_verbose:
-            print('\nLINEAR:')
-            print('lx_in: ', lx_in)
-            print('ux_in: ', ux_in)
-            print('lc_in: ', lc_in)
-            print('uc_in: ', uc_in, '\n')
-
-            print('strictly negative count: ', strictly_negative_count)
-            print('strictly positive count: ', strictly_positive_count)
-            print('crossing count: ', crossing_count, '\n')
-
-            print('lx_out: ', lx_out)
-            print('ux_out: ', ux_out)
-            print('lc_out: ', lc_out)
-            print('uc_out: ', uc_out)
-
+        if is_verbose: print('ReLU: time=', round(time.time() - start_time, 4))
         return [lx_out, ux_out, lc_out, uc_out]
 
 
@@ -213,11 +177,13 @@ def initialize_properties(input, trainable=False, verbose=False):
     global x_max
     global is_trainable
     global is_verbose
+    global start_time
 
     x_min = input[0].flatten(1, -1)
     x_max = input[1].flatten(1, -1)
     is_trainable = trainable
     is_verbose = verbose
+    start_time = time.time()
 
 
 def modLayer(layer):
