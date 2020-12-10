@@ -31,27 +31,28 @@ logger = logging.getLogger(__name__)
 
 def analyze(net, inputs, eps, true_label):
     start_time = time.time()
-    print('Initialization ...')
+    #print('Initialization ...')
     if 'fc' in args.net:
         model = deeppoly_fc.Model(net, eps=eps, x=inputs, true_label=true_label)
     else:
         model = deeppoly_conv.Model(net, eps=eps, x=inputs, true_label=true_label)
     del net
-    print('initialization: time=', round(time.time() - start_time, 4))
+    #print('initialization: time=', round(time.time() - start_time, 4))
 
     iter = 1
     while iter <= 50:
-        print('\nIteration: ', iter)
+        #print('\nIteration: ', iter)
         start_time = time.time()
         is_verified = model.verify()
-        print('verification: time=', round(time.time() -  start_time,  4))
+        #print('verification: time=', round(time.time() -  start_time,  4))
 
         if is_verified:
+            print('Iteration #=',  iter)
             return True
         else:
             start_time = time.time()
             model.updateParams()
-            print('update param: time=', round(time.time() - start_time, 4))
+            #print('update param: time=', round(time.time() - start_time, 4))
             iter += 1
 
     return False

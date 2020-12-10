@@ -44,7 +44,8 @@ class Model(nn.Module):
         self.net = nn.Sequential(*layers)
 
         self.forward()
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05)
+        #self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05)
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=0.5)
 
     def forward(self):
         return self.net([self.lx, self.ux, self.lc, self.uc])

@@ -197,7 +197,7 @@ class ReLU_Conv(nn.Module):
         ux_out = torch.zeros_like(ux_in)
         lc_out = torch.zeros_like(lc_in)
         uc_out = torch.zeros_like(uc_in)
-        slope = torch.ones_like(l)  # ask peshal
+        slope = torch.ones_like(l)
 
         ##### evaluate ReLU conditions
         # Strictly negative
