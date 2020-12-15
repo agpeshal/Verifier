@@ -22,16 +22,11 @@ class Model(nn.Module):
 
         # Initialize verifier configuration
         self.config = Config(args=args, net=model)
+        self.model = model
 
         # Define transformed network
-        ctr = 0
-        layers = []
-        for layer in model.layers:
-            is_backsub = False if ctr < self.config.forward_layers else True
-            layers.append(modLayer(layer, is_backsub))
-            ctr += 1
-        self.net = nn.Sequential(*layers)
-
+        #layers = [modLayer(layer) for layer in self.model.layers]
+        #self.net = nn.Sequential(*layers)
 
 
     def forward(self):
@@ -51,9 +46,12 @@ class Model(nn.Module):
 
 
     def verify(self):
-        iterations = 5
+        iterations = 10
 
         # Box evaluate (no backsub)
+        layers = [modLayer(layer) for layer in self.model.layers]
+        self.net = nn.Sequential(*layers)
+
         l, u, lx, ux, lc, uc = self.forward()
         correct_l = l[-1][self.true_label]
 
@@ -71,7 +69,10 @@ class Model(nn.Module):
 
         ###### BACKSUBSTITUTION
         for backsub in range(self.config.backsub_layers):
-            print('\nBACKSUB: ', backsub)
+            #print('\nBACKSUB: ', backsub)
+            layers = [modLayer(layer) for layer in self.model.layers]
+            self.net = nn.Sequential(*layers)
+
             self.forward()
             self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05)
 
@@ -111,11 +112,6 @@ class Model(nn.Module):
                         lc_ = lc[-bs-2].T
                         uc_ = uc[-bs-2].T
 
-                        lx_[mask_pos == 0, :] = 0.0
-                        ux_[mask_neg == 0, :] = 0.0
-                        lc_[mask_pos == 0] = 0.0
-                        uc_[mask_neg == 0] = 0.0
-
                         # compute objective_c_
                         objective_c_ = torch.sum(mask_pos * lc_ + mask_neg * uc_) + objective_c_
 
@@ -131,9 +127,9 @@ class Model(nn.Module):
                 objective_x = torch.stack(objective_x).T
                 objective_c = torch.stack(objective_c).T
 
-                print('objective_x:', objective_x.shape)
-                print('objective_c:', objective_c.shape)
-                print('l: ', l[-backsub-2].shape)
+                #print('objective_x:', objective_x.shape)
+                #print('objective_c:', objective_c.shape)
+                #print('l: ', l[-backsub-2].shape)
 
                 # Insert l, u to check verification
                 l_ = l[-backsub-2].unsqueeze(0).T.repeat(1, objective_x.shape[1])
@@ -151,19 +147,14 @@ class Model(nn.Module):
 
                 # Penalize negative values (not verified)
                 self.loss = torch.sum(torch.clamp(lb, max=0))
-                print('loss: ', self.loss)
+                #print('loss: ', self.loss)
 
-                #'''
                 if self.loss == 0:
-                    print('verified')
                     return True
                 else:
-                    print('update')
                     self.updateParams()
-                #'''
 
 
-        exit()
 
 
 

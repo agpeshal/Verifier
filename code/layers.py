@@ -1,15 +1,12 @@
+import copy
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-
 torch.autograd.set_detect_anomaly(True)
-
 
 class Normalization(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
-        layer = args[0]
-        self.is_backsub = args[1]
 
     def forward(self, input):
         l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
@@ -28,10 +25,8 @@ class Normalization(nn.Module):
 
 
 class Flatten(nn.Module):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, layer):
         super().__init__()
-        layer = args[0]
-        self.is_backsub = args[1]
         self.start_dim = layer.start_dim
         self.end_dim = layer.end_dim
 
@@ -52,10 +47,8 @@ class Flatten(nn.Module):
 
 
 class Linear(nn.Module):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, layer):
         super().__init__()
-        layer = args[0]
-        self.is_backsub = args[1]
         self.weight = layer.weight.data.T
         self.bias = layer.bias.data
 
@@ -99,8 +92,6 @@ class Linear(nn.Module):
 class ReLU(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
-        layer = args[0]
-        self.is_backsub = args[1]
 
     def forward(self, input):
         l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
@@ -178,10 +169,11 @@ class ReLU(nn.Module):
         return [l_out, u_out, lx_out, ux_out, lc_out, uc_out]
 
 
-def modLayer(layer, is_backsub):
+def modLayer(layer):
     layer_name = layer.__class__.__name__
     modified_layers = {'Normalization': Normalization, 'Flatten': Flatten, 'Linear': Linear, 'ReLU': ReLU}
 
-    print(layer_name)
+    if layer_name not in modified_layers:
+        return copy.deepcopy(layer)
 
-    return modified_layers[layer_name](layer, is_backsub)
+    return modified_layers[layer_name](layer)

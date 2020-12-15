@@ -1,7 +1,6 @@
 import argparse
 import torch
 from networks import FullyConnected, Conv
-import time
 
 import logging
 import deeppoly
@@ -32,17 +31,10 @@ def analyze(net, inputs, eps, true_label):
     model = deeppoly.Model(net, eps=eps, x=inputs, true_label=true_label, args=args)
     del net
 
-    is_verified = model.verify()
-
-
-    if is_verified:
-        print('Iteration #=',  iter)
-        return True
+    if model.verify():
+        print('verified')
     else:
-        model.updateParams()
-        iter += 1
-
-    return False
+        print('not verified')
 
 
 def main():
@@ -85,16 +77,7 @@ def main():
     assert pred_label == true_label
 
     # Test verification
-    total_time = time.time()
-    is_verified = analyze(net, inputs, eps, true_label)
-
-
-    print('\n\nResult:')
-    if is_verified:
-        print('verified')
-    else:
-        print('not verified')
-    print('Total time=', round(time.time() - total_time, 4), 's\n')
+    analyze(net, inputs, eps, true_label)
 
 
 if __name__ == '__main__':
