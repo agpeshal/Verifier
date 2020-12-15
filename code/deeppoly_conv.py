@@ -42,6 +42,7 @@ class Model(nn.Module):
             else:
                 layers.append(modLayer(-1, model.layers[i]))
         self.net = nn.Sequential(*layers)
+        exit()
 
         self.forward()
         #self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05)

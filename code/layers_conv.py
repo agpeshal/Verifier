@@ -423,4 +423,6 @@ def modLayer(layer_prev, layer_cur):
     if layer_name not in modified_layers:
         return copy.deepcopy(layer_cur)
 
+    print(layer_name)
+
     return modified_layers[layer_name](layer_cur)

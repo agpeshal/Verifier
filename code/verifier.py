@@ -4,8 +4,7 @@ from networks import FullyConnected, Conv
 import time
 
 import logging
-import deeppoly_fc
-import deeppoly_conv
+import deeppoly
 import warnings
 
 DEVICE = 'cpu'
@@ -30,30 +29,18 @@ logger = logging.getLogger(__name__)
 
 
 def analyze(net, inputs, eps, true_label):
-    start_time = time.time()
-    #print('Initialization ...')
-    if 'fc' in args.net:
-        model = deeppoly_fc.Model(net, eps=eps, x=inputs, true_label=true_label)
-    else:
-        model = deeppoly_conv.Model(net, eps=eps, x=inputs, true_label=true_label)
+    model = deeppoly.Model(net, eps=eps, x=inputs, true_label=true_label, args=args)
     del net
-    #print('initialization: time=', round(time.time() - start_time, 4))
 
-    iter = 1
-    while iter <= 50:
-        #print('\nIteration: ', iter)
-        start_time = time.time()
-        is_verified = model.verify()
-        #print('verification: time=', round(time.time() -  start_time,  4))
+    is_verified = model.verify()
 
-        if is_verified:
-            print('Iteration #=',  iter)
-            return True
-        else:
-            start_time = time.time()
-            model.updateParams()
-            #print('update param: time=', round(time.time() - start_time, 4))
-            iter += 1
+
+    if is_verified:
+        print('Iteration #=',  iter)
+        return True
+    else:
+        model.updateParams()
+        iter += 1
 
     return False
 
@@ -91,6 +78,7 @@ def main():
         pixel_values = [float(line) for line in lines[1:]]
         eps = float(args.spec[:-4].split('/')[-1].split('_')[-1])
 
+    # Sanity check
     inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()
@@ -99,6 +87,7 @@ def main():
     # Test verification
     total_time = time.time()
     is_verified = analyze(net, inputs, eps, true_label)
+
 
     print('\n\nResult:')
     if is_verified:
