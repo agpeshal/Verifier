@@ -14,12 +14,12 @@ class Normalization(nn.Module):
     def forward(self, input):
         l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
 
-        l_out = l_in
-        u_out = u_in
-        lx_out = lx_in
-        ux_out = ux_in
-        lc_out = lc_in
-        uc_out = uc_in
+        l_out = l_in[:]
+        u_out = u_in[:]
+        lx_out = lx_in[:]
+        ux_out = ux_in[:]
+        lc_out = lc_in[:]
+        uc_out = uc_in[:]
 
         l_out[-1] = (l_in[-1] - 0.1307)/0.3081
         u_out[-1] = (u_in[-1] - 0.1307)/0.3081
@@ -38,12 +38,12 @@ class Flatten(nn.Module):
     def forward(self, input):
         l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
 
-        l_out = l_in
-        u_out = u_in
-        lx_out = lx_in
-        ux_out = ux_in
-        lc_out = lc_in
-        uc_out = uc_in
+        l_out = l_in[:]
+        u_out = u_in[:]
+        lx_out = lx_in[:]
+        ux_out = ux_in[:]
+        lc_out = lc_in[:]
+        uc_out = uc_in[:]
 
         l_out[-1] = l_in[-1].flatten(self.start_dim, self.end_dim).squeeze()
         u_out[-1] = u_in[-1].flatten(self.start_dim, self.end_dim).squeeze()
@@ -62,12 +62,12 @@ class Linear(nn.Module):
     def forward(self, input):
         l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
 
-        l_out = l_in
-        u_out = u_in
-        lx_out = lx_in
-        ux_out = ux_in
-        lc_out = lc_in
-        uc_out = uc_in
+        l_out = l_in[:]
+        u_out = u_in[:]
+        lx_out = lx_in[:]
+        ux_out = ux_in[:]
+        lc_out = lc_in[:]
+        uc_out = uc_in[:]
 
         ##### Compute l_out, u_out
         # 1. prepare signed mask from weight
@@ -105,12 +105,12 @@ class ReLU(nn.Module):
     def forward(self, input):
         l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
 
-        l_out = l_in
-        u_out = u_in
-        lx_out = lx_in
-        ux_out = ux_in
-        lc_out = lc_in
-        uc_out = uc_in
+        l_out = l_in[:]
+        u_out = u_in[:]
+        lx_out = lx_in[:]
+        ux_out = ux_in[:]
+        lc_out = lc_in[:]
+        uc_out = uc_in[:]
 
         n = len(l_out[-1])      # number of neurons
 
