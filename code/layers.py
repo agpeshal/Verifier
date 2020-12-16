@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -159,24 +160,68 @@ def backsubstitution(input):
 
     ##### TODO: Compute l_out_, u_out_
 
-    '''
-    # 1. prepare signed mask from weight
-    mask = torch.sign(self.weight)
+    n = len(lx_in)
+    n = (np.arange(n) + 1) * -1
+
+    lx_out_ = lx_in[-1]
+    ux_out_ = ux_in[-1]
+    lc_out_ = lc_in[-1]
+    uc_out_ = uc_in[-1]
+
+    for i in n:
+        if i != -1:
+            lx_ = lx_in[i - 1].T
+            ux_ = ux_in[i - 1].T
+            lc_ = lc_in[i - 1].T
+            uc_ = uc_in[i - 1].T
+
+            ##### backsubstitute lx, lc
+            mask = torch.sign(lx_out_)
+            mask_pos = torch.zeros_like(mask)
+            mask_neg = torch.zeros_like(mask)
+            mask_pos[mask > 0] = 1
+            mask_neg[mask < 0] = 1
+            mask_pos = mask_pos * lx_out_
+            mask_neg = mask_neg * lx_out_
+
+            lx_out_ = mask_pos * lx_ + mask_neg * ux_                         # update lx
+            lc_out_ = torch.sum(mask_pos * lc_ + mask_neg * uc_) + lc_out_    # update lc
+
+            ##### backsubstitute ux, uc
+            mask = torch.sign(ux_out_)
+            mask_pos = torch.zeros_like(mask)
+            mask_neg = torch.zeros_like(mask)
+            mask_pos[mask > 0] = 1
+            mask_neg[mask < 0] = 1
+            mask_pos = mask_pos * ux_out_
+            mask_neg = mask_neg * ux_out_
+
+            ux_out_ = mask_pos * ux_ + mask_neg * lx_                         # update lx
+            uc_out_ = torch.sum(mask_pos * uc_ + mask_neg * lc_) + uc_out_    # update lc
+
+    # Insert l, u to compute l_out, u_out
+    l_ = l_in[i].unsqueeze(0).T.repeat(1, lx_out_.shape[1])
+    u_ = u_in[i].unsqueeze(0).T.repeat(1, lx_out_.shape[1])
+
+    # compute l_out_
+    mask = torch.sign(lx_out_)
     mask_pos = torch.zeros_like(mask)
     mask_neg = torch.zeros_like(mask)
-    mask_pos[mask > 0] = 1.0
-    mask_neg[mask < 0] = 1.0
-    mask_pos = mask_pos * self.weight
-    mask_neg = mask_neg * self.weight
+    mask_pos[mask > 0] = 1
+    mask_neg[mask < 0] = 1
+    mask_pos = mask_pos * lx_out_
+    mask_neg = mask_neg * lx_out_
+    l_out_ = torch.sum(mask_pos * l_ + mask_neg * u_, dim=0) + lc_out_
 
-    # 2. compute l_out, u_out
-    l_out_ = (torch.mm(l_in[-1].unsqueeze(0), mask_pos) + torch.mm(u_in[-1].unsqueeze(0),
-                                                                   mask_neg)).squeeze() + self.bias
-    u_out_ = (torch.mm(u_in[-1].unsqueeze(0), mask_pos) + torch.mm(l_in[-1].unsqueeze(0),
-                                                                   mask_neg)).squeeze() + self.bias
-    l_out.append(l_out_)
-    u_out.append(u_out_)
-    #'''
+    # compute u_out_
+    mask = torch.sign(ux_out_)
+    mask_pos = torch.zeros_like(mask)
+    mask_neg = torch.zeros_like(mask)
+    mask_pos[mask > 0] = 1
+    mask_neg[mask < 0] = 1
+    mask_pos = mask_pos * ux_out_
+    mask_neg = mask_neg * ux_out_
+    u_out_ = torch.sum(mask_pos * u_ + mask_neg * l_, dim=0) + uc_out_
 
     return l_out_, u_out_
 
