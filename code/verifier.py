@@ -1,6 +1,6 @@
 import argparse
 import torch
-from networks import FullyConnected, Conv
+from networks import FullyConnected, Conv, Dummy
 
 import logging
 import deeppoly
@@ -36,9 +36,53 @@ def analyze(net, inputs, eps, true_label):
     else:
         print('not verified')
 
+def set_weights(net):
+
+    with torch.no_grad():
+
+        # FROM THe Slides
+        net.fc1.weight.data = torch.tensor([
+                                        [1.0, 1.0],
+                                        [1.0, -1.0]
+                                    ])
+        net.fc1.bias.data = torch.zeros_like(net.fc1.bias)
+
+        net.fc2.weight.data = torch.tensor([
+                                        [1.0, 1.0],
+                                        [1.0, -1.0]
+                                    ])
+        net.fc2.bias.data = torch.tensor([-0.5, 0.0])
+
+        net.fc3.weight.data = torch.tensor([
+                                            [-1.0, 1.0],
+                                            [0, 1.0]
+                                        ])
+        net.fc3.bias.data = torch.tensor([3.0, 0])
+
+
+        # From THE PAPER
+        # net.fc1.weight.data = torch.tensor([
+        #                                 [1.0, 1.0],
+        #                                 [1.0, -1.0]
+        #                             ])
+        # net.fc1.bias.data = torch.zeros_like(net.fc1.bias)
+
+        # net.fc2.weight.data = torch.tensor([
+        #                                 [1.0, 1.0],
+        #                                 [1.0, -1.0]
+        #                             ])
+        # net.fc2.bias.data = torch.tensor([0.0, 0.0])
+
+        # net.fc3.weight.data = torch.tensor([
+        #                                     [1.0, 1.0],
+        #                                     [0, 1.0]
+        #                                 ])
+        # net.fc3.bias.data = torch.tensor([1.0, 0])
+
 
 def main():
     # Load network
+    # args.net = 'dummy'
     if args.net == 'fc1':
         net = FullyConnected(DEVICE, INPUT_SIZE, [50, 10]).to(DEVICE)
     elif args.net == 'fc2':
@@ -59,9 +103,11 @@ def main():
         net = Conv(DEVICE, INPUT_SIZE, [(16, 4, 2, 1), (32, 4, 2, 1)], [100, 10], 10).to(DEVICE)
     elif args.net == 'conv3':
         net = Conv(DEVICE, INPUT_SIZE, [(16, 4, 2, 1), (64, 4, 2, 1)], [100, 100, 10], 10).to(DEVICE)
+    elif args.net == 'dummy':
+        net = Dummy()
+        set_weights(net)
     else:
         assert False
-    net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
 
     # Load image
     with open(args.spec, 'r') as f:
@@ -71,7 +117,14 @@ def main():
         eps = float(args.spec[:-4].split('/')[-1].split('_')[-1])
 
     # Sanity check
-    inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
+    if args.net != 'dummy':
+        net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
+        inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
+    else:
+        inputs = torch.FloatTensor([0, 0]).view(1, 1, 2)
+        eps = 1
+        true_label = 0
+
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label

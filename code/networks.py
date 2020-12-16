@@ -62,3 +62,19 @@ class Conv(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
+
+class Dummy(nn.Module):
+    def __init__(self) -> None:
+        super(Dummy, self).__init__()
+        self.fc1 = nn.Linear(2, 2)
+        self.fc2 = nn.Linear(2, 2)
+        self.fc3 = nn.Linear(2, 2)
+        self.layers = nn.Sequential(nn.Flatten(),
+                                    self.fc1,
+                                    nn.ReLU(),
+                                    self.fc2,
+                                    nn.ReLU(),
+                                    self.fc3)
+    
+    def forward(self, x):
+        self.layers(x)
