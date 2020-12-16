@@ -54,7 +54,9 @@ class Model(nn.Module):
             3. Forward pass
             l, u, lx, ux, lc, uc = self.forward()
 
-            4. Compute objectives [x5 - x0, x5 - x1,...] = [l5 - u0, l5 - u1, ...]
+            3. Define objectives (9 objectives)
+
+            4. Backsubstitution to compute l,u for objectives
 
             5. Compute loss
             self.loss = torch.sum(torch.clamp(lb, max=0))
