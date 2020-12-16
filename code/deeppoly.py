@@ -24,11 +24,6 @@ class Model(nn.Module):
         self.config = Config(args=args, net=model)
         self.model = model
 
-        # Define transformed network
-        #layers = [modLayer(layer) for layer in self.model.layers]
-        #self.net = nn.Sequential(*layers)
-
-
     def forward(self):
         return self.net([[self.x_min], [self.x_max], [], [], [], []])       # [[l], [u], [lx], [ux], [lc], [uc]]
 
@@ -46,6 +41,35 @@ class Model(nn.Module):
 
 
     def verify(self):
+
+        '''
+        1. Network inititalization
+        layers = [modLayer(layer) for layer in self.model.layers]
+        self.net = nn.Sequential(*layers)
+
+        2. Set iteration
+        iterations = 10
+        for iter in range(iterations):
+
+            3. Forward pass
+            l, u, lx, ux, lc, uc = self.forward()
+
+            4. Compute objectives [x5 - x0, x5 - x1,...] = [l5 - u0, l5 - u1, ...]
+
+            5. Compute loss
+            self.loss = torch.sum(torch.clamp(lb, max=0))
+
+            6. Update parameters
+            if self.loss == 0:
+                return True
+            else:
+                self.updateParams()
+        '''
+
+
+
+
+
         iterations = 10
 
         # Box evaluate (no backsub)
@@ -66,15 +90,13 @@ class Model(nn.Module):
         if ctr == NUM_CLASSES - 1:
             return True
 
-
         ###### BACKSUBSTITUTION
         for backsub in range(self.config.backsub_layers):
             #print('\nBACKSUB: ', backsub)
             layers = [modLayer(layer) for layer in self.model.layers]
             self.net = nn.Sequential(*layers)
-
             self.forward()
-            self.optimizer = torch.optim.Adam(self.parameters(), lr=0.05)
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=0.5)
 
             for iter in range(iterations):
                 l, u, lx, ux, lc, uc = self.forward()

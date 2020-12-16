@@ -19,6 +19,7 @@ class Config:
                     'conv1': 3,
                     'conv2': 3,
                     'conv3': 5}
+
         self.backsub_layers = backsub[self.args.net]
 
         self.verbose = False

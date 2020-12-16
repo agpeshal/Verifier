@@ -62,22 +62,6 @@ class Linear(nn.Module):
         lc_out = lc_in[:]
         uc_out = uc_in[:]
 
-        ##### Compute l_out, u_out
-        # 1. prepare signed mask from weight
-        mask = torch.sign(self.weight)
-        mask_pos = torch.zeros_like(mask)
-        mask_neg = torch.zeros_like(mask)
-        mask_pos[mask > 0] = 1.0
-        mask_neg[mask < 0] = 1.0
-        mask_pos = mask_pos * self.weight
-        mask_neg = mask_neg * self.weight
-
-        # 2. compute l_out, u_out
-        l_out_ = (torch.mm(l_in[-1].unsqueeze(0), mask_pos) + torch.mm(u_in[-1].unsqueeze(0), mask_neg)).squeeze() + self.bias
-        u_out_ = (torch.mm(u_in[-1].unsqueeze(0), mask_pos) + torch.mm(l_in[-1].unsqueeze(0), mask_neg)).squeeze() + self.bias
-        l_out.append(l_out_)
-        u_out.append(u_out_)
-
         ##### lx_out, ux_out
         lx_out.append(self.weight)
         ux_out.append(self.weight)
@@ -85,6 +69,11 @@ class Linear(nn.Module):
         ##### lc_out, uc_out
         lc_out.append(self.bias)
         uc_out.append(self.bias)
+
+        ##### l_out, u_out
+        l_out_, u_out_ = backsubstitution(input=[l_out, u_out, lx_out, ux_out, lc_out, uc_out])
+        l_out.append(l_out_)
+        u_out.append(u_out_)
 
         return [l_out, u_out, lx_out, ux_out, lc_out, uc_out]
 
@@ -105,8 +94,6 @@ class ReLU(nn.Module):
 
         n = len(l_out[-1])      # number of neurons
 
-        l_out_ = torch.zeros(n)
-        u_out_ = torch.zeros(n)
         lx_out_ = torch.ones(n)
         ux_out_ = torch.ones(n)
         lc_out_ = torch.zeros(n)
@@ -120,8 +107,6 @@ class ReLU(nn.Module):
         # Strictly negative
         idx = torch.where(u_in_ <= 0)[0]
         if len(idx) > 0:
-            l_out_[idx] = 0.0
-            u_out_[idx] = 0.0
             lx_out_[idx] = 0.0
             ux_out_[idx] = 0.0
             lc_out_[idx] = 0.0
@@ -130,8 +115,6 @@ class ReLU(nn.Module):
         # Strictly positive
         idx = torch.where(l_in_ >= 0)[0]
         if len(idx) > 0:
-            l_out_[idx] = l_in_[idx]
-            u_out_[idx] = u_in_[idx]
             lx_out_[idx] = 1.0
             ux_out_[idx] = 1.0
             lc_out_[idx] = 0.0
@@ -141,7 +124,6 @@ class ReLU(nn.Module):
         idx = torch.where((l_in_ < 0) & (u_in_ > 0))[0]
         if len(idx) > 0:
             # lower bound
-            l_out_[idx] = 0.0
             lx_out_[idx] = 0.0
             lc_out_[idx] = 0.0
 
@@ -154,19 +136,49 @@ class ReLU(nn.Module):
             slope = torch.clamp(self.slope, 0, 1)
             ux_out_[idx] = slope[idx]
             uc_out_[idx] = - slope[idx] * l_in_[idx]
-            u_out_[idx] = slope[idx] * u_in_[idx] - slope[idx] * l_in_[idx]
 
-        # append
-        l_out.append(l_out_)
-        u_out.append(u_out_)
 
+        ##### lx_out, ux_out
         lx_out.append(torch.diag(lx_out_))
         ux_out.append(torch.diag(ux_out_))
 
+        ##### lc_out, uc_out
         lc_out.append(lc_out_)
         uc_out.append(uc_out_)
 
+        ##### l_out, u_out
+        l_out_, u_out_ = backsubstitution(input=[l_out, u_out, lx_out, ux_out, lc_out, uc_out])
+        l_out.append(l_out_)
+        u_out.append(u_out_)
+
         return [l_out, u_out, lx_out, ux_out, lc_out, uc_out]
+
+
+def backsubstitution(input):
+    l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
+
+    ##### TODO: Compute l_out_, u_out_
+
+    '''
+    # 1. prepare signed mask from weight
+    mask = torch.sign(self.weight)
+    mask_pos = torch.zeros_like(mask)
+    mask_neg = torch.zeros_like(mask)
+    mask_pos[mask > 0] = 1.0
+    mask_neg[mask < 0] = 1.0
+    mask_pos = mask_pos * self.weight
+    mask_neg = mask_neg * self.weight
+
+    # 2. compute l_out, u_out
+    l_out_ = (torch.mm(l_in[-1].unsqueeze(0), mask_pos) + torch.mm(u_in[-1].unsqueeze(0),
+                                                                   mask_neg)).squeeze() + self.bias
+    u_out_ = (torch.mm(u_in[-1].unsqueeze(0), mask_pos) + torch.mm(l_in[-1].unsqueeze(0),
+                                                                   mask_neg)).squeeze() + self.bias
+    l_out.append(l_out_)
+    u_out.append(u_out_)
+    #'''
+
+    return l_out_, u_out_
 
 
 def modLayer(layer):
