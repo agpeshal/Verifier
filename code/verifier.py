@@ -1,6 +1,6 @@
 import argparse
 import torch
-from networks import FullyConnected, Conv, Dummy
+from networks import FullyConnected, Conv, Dummy, Dummy_Norm
 
 import logging
 import deeppoly
@@ -15,7 +15,7 @@ torch.autograd.set_detect_anomaly(True)
 parser = argparse.ArgumentParser(description='Neural network verification using DeepPoly relaxation')
 parser.add_argument('--net',
                     type=str,
-                    choices=['fc1', 'fc2', 'fc3', 'fc4', 'fc5', 'fc6', 'fc7', 'conv1', 'conv2', 'conv3', 'dummy'],
+                    choices=['fc1', 'fc2', 'fc3', 'fc4', 'fc5', 'fc6', 'fc7', 'conv1', 'conv2', 'conv3', 'dummy', 'dummy_norm'],
                     required=False,
                     help='Neural network architecture which is supposed to be verified.')
 parser.add_argument('--spec', type=str, required=False, help='Test case to verify.')
@@ -41,23 +41,23 @@ def set_weights(net):
     with torch.no_grad():
 
         # FROM THe Slides
-        net.fc1.weight.data = torch.tensor([
-                                        [1.0, 1.0],
-                                        [1.0, -1.0]
-                                    ])
-        net.fc1.bias.data = torch.zeros_like(net.fc1.bias)
-
-        net.fc2.weight.data = torch.tensor([
-                                        [1.0, 1.0],
-                                        [1.0, -1.0]
-                                    ])
-        net.fc2.bias.data = torch.tensor([-0.5, 0.0])
-
-        net.fc3.weight.data = torch.tensor([
-                                            [-1.0, 1.0],
-                                            [0, 1.0]
-                                        ])
-        net.fc3.bias.data = torch.tensor([3.0, 0])
+        # net.fc1.weight.data = torch.tensor([
+        #                                 [1.0, 1.0],
+        #                                 [1.0, -1.0]
+        #                             ])
+        # net.fc1.bias.data = torch.zeros_like(net.fc1.bias)
+        #
+        # net.fc2.weight.data = torch.tensor([
+        #                                 [1.0, 1.0],
+        #                                 [1.0, -1.0]
+        #                             ])
+        # net.fc2.bias.data = torch.tensor([-0.5, 0.0])
+        #
+        # net.fc3.weight.data = torch.tensor([
+        #                                     [-1.0, 1.0],
+        #                                     [0, 1.0]
+        #                                 ])
+        # net.fc3.bias.data = torch.tensor([3.0, 0])
 
 
         # From THE PAPER
@@ -78,6 +78,20 @@ def set_weights(net):
         #                                     [0, 1.0]
         #                                 ])
         # net.fc3.bias.data = torch.tensor([1.0, 0])
+
+        # Dummy Normalization (custom)
+        net.fc1.weight.data = torch.tensor([
+            [1.0, 1.0],
+            [1.0, -1.0]
+        ])
+        net.fc1.bias.data = torch.zeros_like(net.fc1.bias)
+
+        net.fc2.weight.data = torch.tensor([
+            [1.0, 1.0],
+            [1.0, -1.0]
+        ])
+        net.fc2.bias.data = torch.tensor([-0.5, 0.0])
+
 
 
 def main():
@@ -108,11 +122,14 @@ def main():
     elif args.net == 'dummy':
         net = Dummy()
         set_weights(net)
+    elif args.net == 'dummy_norm':
+        net = Dummy_Norm()
+        set_weights(net)
     else:
         assert False
 
     # Sanity check
-    if args.net != 'dummy':
+    if args.net != 'dummy' or args.net != 'dummy_norm':
         # Load image
         with open(args.spec, 'r') as f:
             lines = [line[:-1] for line in f.readlines()]
@@ -126,8 +143,12 @@ def main():
         outs = net(inputs)
         pred_label = outs.max(dim=1)[1].item()
         assert pred_label == true_label
-    else:
+    elif args.net == 'dummy':
         inputs = torch.FloatTensor([0, 0]).view(1, 1, 2)
+        eps = 1
+        true_label = 0
+    elif args.net == 'dummy_norm':
+        inputs = torch.FloatTensor([1, 1]).view(1, 1, 2)
         eps = 1
         true_label = 0
 

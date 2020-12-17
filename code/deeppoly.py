@@ -17,7 +17,7 @@ class Model(nn.Module):
         x = x.squeeze(0)
 
         self.true_label = true_label
-        if args.net != 'dummy':
+        if args.net != 'dummy' or args.net != 'dummy_norm':
             self.x_min = torch.clamp(x.data - eps, min=0)
             self.x_max = torch.clamp(x.data + eps, max=1)
         else:
