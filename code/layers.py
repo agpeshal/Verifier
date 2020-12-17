@@ -99,7 +99,7 @@ class ReLU(nn.Module):
         ux_out_ = torch.ones(n)
         lc_out_ = torch.zeros(n)
         uc_out_ = torch.zeros(n)
-        slope = torch.ones(n)
+
 
         ##### evaluate ReLU conditions
         l_in_ = l_in[-1]
@@ -130,13 +130,14 @@ class ReLU(nn.Module):
 
             # upper bound
             if not hasattr(self, 'slope'):
+                slope = torch.ones(n)
                 slope[idx] = u_in_[idx] / (u_in_[idx] - l_in_[idx])
                 self.slope = Variable(torch.clamp(slope, 0, 1), requires_grad=True)
                 self.slope.retain_grad()
 
-            slope = torch.clamp(self.slope, 0, 1)
-            ux_out_[idx] = slope[idx]
-            uc_out_[idx] = - slope[idx] * l_in_[idx]
+            self.slope.data.clamp_(min=0, max=1)
+            ux_out_[idx] = self.slope[idx]
+            uc_out_[idx] = - self.slope[idx] * l_in_[idx]
 
 
         ##### lx_out, ux_out
@@ -155,10 +156,50 @@ class ReLU(nn.Module):
         return [l_out, u_out, lx_out, ux_out, lc_out, uc_out]
 
 
+class Verifier(nn.Module):
+    def __init__(self, num_classes, true_label):
+        super().__init__()
+        self.num_classes = num_classes
+        self.true_label = true_label
+
+    def forward(self, input):
+        l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
+
+        l_out = l_in[:]
+        u_out = u_in[:]
+        lx_out = lx_in[:]
+        ux_out = ux_in[:]
+        lc_out = lc_in[:]
+        uc_out = uc_in[:]
+
+        ##### lx_out, ux_out
+        lx_out_ = torch.zeros(size=(self.num_classes-1, self.num_classes))
+        for i in range(self.num_classes-1):
+            lx_out_[i, self.true_label] = 1.0
+
+            if i < self.true_label:
+                lx_out_[i, i] = -1.0
+            else:
+                lx_out_[i, i+1] = -1.0
+
+        lx_out.append(lx_out_.T)
+        ux_out.append(lx_out_.T)  # lx_out_ and ux_out_ are the same
+
+        ##### lc_out, uc_out
+        lc_out_ = torch.zeros(self.num_classes - 1)
+        lc_out.append(lc_out_)
+        uc_out.append(lc_out_)  # lx_out_ and ux_out_ are the same
+
+        ##### l_out, u_out
+        l_out_, u_out_ = backsubstitution(input=[l_out, u_out, lx_out, ux_out, lc_out, uc_out])
+        l_out.append(l_out_)
+        u_out.append(u_out_)
+
+        return [l_out, u_out, lx_out, ux_out, lc_out, uc_out]
+
+
 def backsubstitution(input):
     l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
-
-    ##### TODO: Compute l_out_, u_out_
 
     n = len(lx_in)
     n = (np.arange(n) + 1) * -1
@@ -170,10 +211,10 @@ def backsubstitution(input):
 
     for i in n:
         if i != -1:
-            lx_ = lx_in[i - 1].T
-            ux_ = ux_in[i - 1].T
-            lc_ = lc_in[i - 1].T
-            uc_ = uc_in[i - 1].T
+            lx_ = lx_in[i]
+            ux_ = ux_in[i]
+            lc_ = lc_in[i]
+            uc_ = uc_in[i]
 
             ##### backsubstitute lx, lc
             mask = torch.sign(lx_out_)
@@ -184,8 +225,8 @@ def backsubstitution(input):
             mask_pos = mask_pos * lx_out_
             mask_neg = mask_neg * lx_out_
 
-            lx_out_ = mask_pos * lx_ + mask_neg * ux_                         # update lx
-            lc_out_ = torch.sum(mask_pos * lc_ + mask_neg * uc_) + lc_out_    # update lc
+            lx_out_ = torch.mm(lx_, mask_pos) + torch.mm(ux_, mask_neg)
+            lc_out_ = torch.mm(lc_.unsqueeze(0), mask_pos).squeeze() + torch.mm(uc_.unsqueeze(0), mask_neg).squeeze() + lc_out_
 
             ##### backsubstitute ux, uc
             mask = torch.sign(ux_out_)
@@ -196,8 +237,9 @@ def backsubstitution(input):
             mask_pos = mask_pos * ux_out_
             mask_neg = mask_neg * ux_out_
 
-            ux_out_ = mask_pos * ux_ + mask_neg * lx_                         # update lx
-            uc_out_ = torch.sum(mask_pos * uc_ + mask_neg * lc_) + uc_out_    # update lc
+            ux_out_ = torch.mm(ux_, mask_pos) + torch.mm(lx_, mask_neg)
+            uc_out_ = torch.mm(uc_.unsqueeze(0), mask_pos).squeeze() + torch.mm(lc_.unsqueeze(0), mask_neg).squeeze() + uc_out_
+
 
     # Insert l, u to compute l_out, u_out
     l_ = l_in[i].unsqueeze(0).T.repeat(1, lx_out_.shape[1])

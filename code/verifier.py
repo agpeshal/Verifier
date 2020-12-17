@@ -15,7 +15,7 @@ torch.autograd.set_detect_anomaly(True)
 parser = argparse.ArgumentParser(description='Neural network verification using DeepPoly relaxation')
 parser.add_argument('--net',
                     type=str,
-                    choices=['fc1', 'fc2', 'fc3', 'fc4', 'fc5', 'fc6', 'fc7', 'conv1', 'conv2', 'conv3'],
+                    choices=['fc1', 'fc2', 'fc3', 'fc4', 'fc5', 'fc6', 'fc7', 'conv1', 'conv2', 'conv3', 'dummy'],
                     required=False,
                     help='Neural network architecture which is supposed to be verified.')
 parser.add_argument('--spec', type=str, required=False, help='Test case to verify.')
@@ -109,25 +109,25 @@ def main():
     else:
         assert False
 
-    # Load image
-    with open(args.spec, 'r') as f:
-        lines = [line[:-1] for line in f.readlines()]
-        true_label = int(lines[0])
-        pixel_values = [float(line) for line in lines[1:]]
-        eps = float(args.spec[:-4].split('/')[-1].split('_')[-1])
-
     # Sanity check
     if args.net != 'dummy':
+        # Load image
+        with open(args.spec, 'r') as f:
+            lines = [line[:-1] for line in f.readlines()]
+            true_label = int(lines[0])
+            pixel_values = [float(line) for line in lines[1:]]
+            eps = float(args.spec[:-4].split('/')[-1].split('_')[-1])
+
         net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
         inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
+
+        outs = net(inputs)
+        pred_label = outs.max(dim=1)[1].item()
+        assert pred_label == true_label
     else:
         inputs = torch.FloatTensor([0, 0]).view(1, 1, 2)
         eps = 1
         true_label = 0
-
-    outs = net(inputs)
-    pred_label = outs.max(dim=1)[1].item()
-    assert pred_label == true_label
 
     # Test verification
     analyze(net, inputs, eps, true_label)
