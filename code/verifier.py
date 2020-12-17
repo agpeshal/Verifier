@@ -83,6 +83,8 @@ def set_weights(net):
 def main():
     # Load network
     # args.net = 'dummy'
+    # args.net = 'conv2'
+    # args.spec = '../test_cases/conv2/img0_0.16800.txt'
     if args.net == 'fc1':
         net = FullyConnected(DEVICE, INPUT_SIZE, [50, 10]).to(DEVICE)
     elif args.net == 'fc2':
