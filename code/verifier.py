@@ -88,17 +88,18 @@ def set_weights(net):
 
         net.fc2.weight.data = torch.tensor([
             [1.0, 1.0],
-            [1.0, -1.0]
+            [1.0, -1.0],
+            [2, -3],
         ])
-        net.fc2.bias.data = torch.tensor([-0.5, 0.0])
+        net.fc2.bias.data = torch.tensor([-0.5, 0.0, -1])
 
 
 
 def main():
     # Load network
-    # args.net = 'dummy'
-    # args.net = 'conv2'
-    # args.spec = '../test_cases/conv2/img0_0.16800.txt'
+    # args.net = 'dummy_norm'
+    # args.net = 'fc1'
+    # args.spec = '../test_cases/fc1/img0_0.06200.txt'
     if args.net == 'fc1':
         net = FullyConnected(DEVICE, INPUT_SIZE, [50, 10]).to(DEVICE)
     elif args.net == 'fc2':
@@ -129,7 +130,7 @@ def main():
         assert False
 
     # Sanity check
-    if args.net != 'dummy' or args.net != 'dummy_norm':
+    if (args.net != 'dummy') and (args.net != 'dummy_norm'):
         # Load image
         with open(args.spec, 'r') as f:
             lines = [line[:-1] for line in f.readlines()]

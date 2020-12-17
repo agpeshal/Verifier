@@ -17,13 +17,12 @@ class Model(nn.Module):
         x = x.squeeze(0)
 
         self.true_label = true_label
-        if args.net != 'dummy' or args.net != 'dummy_norm':
+        if args.net != 'dummy' and args.net != 'dummy_norm':
             self.x_min = torch.clamp(x.data - eps, min=0)
             self.x_max = torch.clamp(x.data + eps, max=1)
         else:
             self.x_min = x.data - eps
             self.x_max = x.data + eps
-
         self.model = model
 
     def forward(self):
@@ -52,7 +51,7 @@ class Model(nn.Module):
         return layers
 
     def verify(self):
-        iterations = 50
+        iterations = 20
 
         # Initialize transformed network
         # layers = [modLayer(layer) for layer in self.model.layers]
@@ -70,14 +69,18 @@ class Model(nn.Module):
             return False
 
         for i in range(iterations):
+            # print("Iteration: ", i)
             l, u, lx, ux, lc, uc = self.forward()
 
             # Penalize negative values (not verified)
             idx = torch.where(l[-1] < 0)[0]
             self.loss = torch.sum(l[-1][idx])
-
+            #self.loss = torch.sum(l[-1])
+            
+            # if not torch.any(l[-1] < 0):
+            #     return True
             if self.loss == 0:
                 return True
-
+            # print("Iteration: {}, loss: {}".format(i, -self.loss.item()))
             self.updateParams()
 

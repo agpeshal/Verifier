@@ -97,7 +97,7 @@ class Dummy_Norm(nn.Module):
         super(Dummy_Norm, self).__init__()
         self.normalization = Normalization_Dummy()
         self.fc1 = nn.Linear(2, 2)
-        self.fc2 = nn.Linear(2, 2)
+        self.fc2 = nn.Linear(2, 3)
         self.layers = nn.Sequential(self.normalization,
                                     nn.Flatten(),
                                     self.fc1,

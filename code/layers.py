@@ -5,6 +5,25 @@ import torch.nn as nn
 from torch.autograd import Variable
 torch.autograd.set_detect_anomaly(True)
 
+class Normalization_Dummy(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    def forward(self, input):
+        l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
+
+        l_out = l_in[:]
+        u_out = u_in[:]
+        lx_out = lx_in[:]
+        ux_out = ux_in[:]
+        lc_out = lc_in[:]
+        uc_out = uc_in[:]
+
+        l_out[-1] = (l_in[-1] - 0.5)/1
+        u_out[-1] = (u_in[-1] - 0.5)/1
+
+        return [l_out, u_out, lx_out, ux_out, lc_out, uc_out]
+
 class Normalization(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -135,12 +154,22 @@ class ReLU_Linear(nn.Module):
                 slope = torch.ones(n)
                 slope[idx] = u_in_[idx] / (u_in_[idx] - l_in_[idx])
                 self.slope = Variable(torch.clamp(slope, 0, 1), requires_grad=True)
-                self.slope.retain_grad()
-
+                # self.slope.retain_grad()
+            
             self.slope.data.clamp_(min=0, max=1)
             ux_out_[idx] = self.slope[idx]
-            uc_out_[idx] = - self.slope[idx] * l_in_[idx]
 
+            threshold = u_in_[idx] / (u_in_[idx] - l_in_[idx])
+            # uc_out_[idx] = - self.slope[idx] * l_in_[idx]
+
+            mask_pos = (self.slope[idx] >= threshold).float()
+            mask_neg = (self.slope[idx] < threshold).float()
+            # mask_pos = torch.zeros_like(self.slope[idx])
+            # mask_neg = torch.ones_like(self.slope[idx])
+
+            # uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx]) * mask_neg + (- self.slope[idx] * l_in_[idx]) * mask_pos
+            uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx])
+            # uc_out_[idx] = (- self.slope[idx] * l_in_[idx])
 
         ##### lx_out, ux_out
         lx_out.append(torch.diag(lx_out_))
@@ -151,9 +180,16 @@ class ReLU_Linear(nn.Module):
         uc_out.append(uc_out_)
 
         ##### l_out, u_out
-        l_out_, u_out_ = backsubstitution(input=[l_out, u_out, lx_out, ux_out, lc_out, uc_out])
-        l_out.append(l_out_)
-        u_out.append(u_out_)
+        # l_out_, u_out_ = backsubstitution(input=[l_out, u_out, lx_out, ux_out, lc_out, uc_out])
+        # for i in range(len(u_out_)):
+        #     u_out_[i].clamp_(min=0, max=u_in_[i].item())
+
+        lower = torch.max(torch.zeros_like(l_in_), l_in_)
+        upper = u_in_ * ux_out_ + uc_out_
+        # l_out.append(l_out_)
+        # u_out.append(u_out_)
+        l_out.append(lower)
+        u_out.append(upper)
 
         return [l_out, u_out, lx_out, ux_out, lc_out, uc_out]
 
@@ -393,6 +429,7 @@ def modLayer(layer_prev, layer_cur):
         layer_name = layer_cur.__class__.__name__
 
     modified_layers = {'Normalization': Normalization,
+                       'Normalization_Dummy': Normalization_Dummy,
                        'Flatten': Flatten,
                        'Linear': Linear,
                        'ReLU_Linear': ReLU_Linear,
