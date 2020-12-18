@@ -2,12 +2,17 @@ import argparse
 import torch
 from networks import FullyConnected, Conv
 
-import logging
-import deeppoly
+import deeppoly_fc
+import deeppoly_conv
+from configuration import *
+import warnings
 
 DEVICE = 'cpu'
 INPUT_SIZE = 28
 
+warnings.filterwarnings('ignore')
+torch.autograd.set_detect_anomaly(True)
+torch.set_grad_enabled(True)
 
 parser = argparse.ArgumentParser(description='Neural network verification using DeepPoly relaxation')
 parser.add_argument('--net',
@@ -16,35 +21,26 @@ parser.add_argument('--net',
                     required=False,
                     help='Neural network architecture which is supposed to be verified.')
 parser.add_argument('--spec', type=str, required=False, help='Test case to verify.')
-parser.add_argument('--debug', default=True, required=False, help='Flag to enable debug.')
 args = parser.parse_args()
-
-torch.set_grad_enabled(True)
-logging.basicConfig(level=(10 if args.debug else 20), format="%(asctime)s :: %(message)s")
-logger = logging.getLogger(__name__)
 
 
 def analyze(net, inputs, eps, true_label):
-    base_pred = net(inputs)     # logits
-    model = deeppoly.Model(net, eps=eps, x=inputs, true_label=true_label)
+    if 'fc' in args.net:
+        model = deeppoly_fc.Model(net, eps=eps, x=inputs, true_label=true_label)
+    elif 'conv' in args.net:
+        model = deeppoly_conv.Model(net, eps=eps, x=inputs, true_label=true_label)
     del net
 
-    model.verify()
+    config = Configuration(args=args)
 
-    exit()
-
+    if model.verify(config):
+        print('verified')
+    else:
+        print('not verified')
 
 
 def main():
-
-    # args.net = 'fc6'
-    # args.spec = 'test_cases/fc6/img0_0.05000.txt'
-    with open(args.spec, 'r') as f:
-        lines = [line[:-1] for line in f.readlines()]
-        true_label = int(lines[0])
-        pixel_values = [float(line) for line in lines[1:]]
-        eps = float(args.spec[:-4].split('/')[-1].split('_')[-1])
-
+    # Load network
     if args.net == 'fc1':
         net = FullyConnected(DEVICE, INPUT_SIZE, [50, 10]).to(DEVICE)
     elif args.net == 'fc2':
@@ -68,21 +64,23 @@ def main():
     else:
         assert False
 
-    if 'conv' in args.net:
-        print("not verified")
-        exit()
+    # Load image
+    with open(args.spec, 'r') as f:
+        lines = [line[:-1] for line in f.readlines()]
+        true_label = int(lines[0])
+        pixel_values = [float(line) for line in lines[1:]]
+        eps = float(args.spec[:-4].split('/')[-1].split('_')[-1])
 
     net.load_state_dict(torch.load('../mnist_nets/%s.pt' % args.net, map_location=torch.device(DEVICE)))
-
     inputs = torch.FloatTensor(pixel_values).view(1, 1, INPUT_SIZE, INPUT_SIZE).to(DEVICE)
+
+    # Sanity check
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label
 
-    if analyze(net, inputs, eps, true_label):
-        print('verified')
-    else:
-        print('not verified')
+    # Test verification
+    analyze(net, inputs, eps, true_label)
 
 
 if __name__ == '__main__':
