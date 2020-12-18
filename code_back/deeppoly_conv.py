@@ -1,12 +1,14 @@
 from layers_conv import *
-torch.autograd.set_detect_anomaly(True)
 import time
+torch.autograd.set_detect_anomaly(True)
+
 
 INPUT_SIZE = 28
 NUM_CLASSES = 10
 
+
 class Model(nn.Module):
-    def __init__(self, model, eps, x, true_label):
+    def __init__(self, model, eps, x, true_label, args):
         super().__init__()
         x = x.squeeze(0)
 
@@ -22,12 +24,12 @@ class Model(nn.Module):
 
     def parameters(self):
         for layer in self.net:
-            if isinstance(layer, ReLU) and hasattr(layer, 'slope'):
+            if isinstance(layer, ReLU_Linear) and hasattr(layer, "slope"):
                 yield layer.slope
 
 
-    # Calculates the gradient of `loss` wrt to ReLU slopes.
     def updateParams(self):
+        # Calculates the gradient of `loss` wrt to ReLU slopes.
         loss = -self.loss
         self.optimizer.zero_grad()
         loss.backward(retain_graph=True)
@@ -37,13 +39,15 @@ class Model(nn.Module):
     def get_layers(self):
         layers = []
         for i in range(len(self.model.layers)):
-            layers.append(modLayer(self.model.layers[i]))
+            if i > 1:
+                layers.append(modLayer(self.model.layers[i - 1], self.model.layers[i]))
+            else:
+                layers.append(modLayer(-1, self.model.layers[i]))
         return layers
 
 
-    def verify(self, config):
-        iterations = config.iterations
-        lr = config.lr
+    def verify(self):
+        iterations = 20
 
         # Initialize transformed network
         layers = self.get_layers()
@@ -54,12 +58,13 @@ class Model(nn.Module):
         self.forward()
         # If not crossing ReLU in Conv -> parameters empty!
         try:
-            self.optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+            self.optimizer = torch.optim.Adam(self.parameters(), lr=0.5)
         except:
-            print('Nothing to optimize')
+            print("Nothing to optimize")
             return False
 
         for i in range(iterations):
+            # print("Iteration: ", i)
             start_time = time.time()
             l, u, lx, ux, lc, uc, dimension = self.forward()
 
@@ -70,8 +75,6 @@ class Model(nn.Module):
             if self.loss == 0:
                 return True
 
+            print("Iteration: {}, loss: {}".format(i, -self.loss.item()), ' Time: ', round(time.time() - start_time, 2))
             self.updateParams()
-
-            print('Iteration: {}, loss: {}'.format(i, -self.loss.item()), ' Time: ', round(time.time() - start_time, 2))
-
 

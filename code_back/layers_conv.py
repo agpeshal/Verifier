@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+
 torch.autograd.set_detect_anomaly(True)
 
 
@@ -127,7 +128,7 @@ class Conv2D(nn.Module):
         return [l_out, u_out, lx_out, ux_out, lc_out, uc_out, dim_out]
 
 
-class ReLU(nn.Module):
+class ReLU_Linear(nn.Module):
     def __init__(self, layer):
         super().__init__()
 
@@ -188,9 +189,10 @@ class ReLU(nn.Module):
             self.slope.data.clamp_(min=0, max=1)
             ux_out_[idx] = self.slope[idx]
 
-            # threshold = u_in_[idx] / (u_in_[idx] - l_in_[idx])
-            # mask_pos = (self.slope[idx] >= threshold).float()
-            # mask_neg = (self.slope[idx] < threshold).float()
+            threshold = u_in_[idx] / (u_in_[idx] - l_in_[idx])
+
+            mask_pos = (self.slope[idx] >= threshold).float()
+            mask_neg = (self.slope[idx] < threshold).float()
 
             # uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx]) * mask_neg + (- self.slope[idx] * l_in_[idx]) * mask_pos
             uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx])
@@ -272,6 +274,124 @@ class Linear(nn.Module):
         u_out.append(u_out_)
 
         return [l_out, u_out, lx_out, ux_out, lc_out, uc_out, dim_out]
+
+
+
+class ReLU_Conv_Peshal(nn.Module):
+    def __init__(self, layer):
+        super().__init__()
+
+    def forward(self, input):
+        l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
+
+        l_out = l_in[:]
+        u_out = u_in[:]
+        lx_out = lx_in[:]
+        ux_out = ux_in[:]
+        lc_out = lc_in[:]
+        uc_out = uc_in[:]
+
+        shape = l_out[-1].shape  # number of neurons
+
+        l_out_ = torch.zeros(shape)
+        u_out_ = torch.zeros(shape)
+        lx_out_ = torch.ones(shape)
+        ux_out_ = torch.ones(shape)
+        lc_out_ = torch.zeros(shape)
+        uc_out_ = torch.zeros(shape)
+        slope = torch.ones(shape)
+
+        ##### evaluate ReLU conditions
+        l_in_ = l_in[-1]
+        u_in_ = u_in[-1]
+
+        # Strictly negative
+        idx = torch.where(u_in_ <= 0)[0]
+        if len(idx) > 0:
+            l_out_[idx] = 0.0
+            u_out_[idx] = 0.0
+            lx_out_[idx] = 0.0
+            ux_out_[idx] = 0.0
+            lc_out_[idx] = 0.0
+            uc_out_[idx] = 0.0
+
+        # Strictly positive
+        idx = torch.where(l_in_ >= 0)[0]
+        if len(idx) > 0:
+            l_out_[idx] = l_in_[idx]
+            u_out_[idx] = u_in_[idx]
+            lx_out_[idx] = 1.0
+            ux_out_[idx] = 1.0
+            lc_out_[idx] = 0.0
+            uc_out_[idx] = 0.0
+
+        # Crossing ReLU
+        idx = torch.where((l_in_ < 0) & (u_in_ > 0))[0]
+        if len(idx) > 0:
+            # lower bound
+            l_out_[idx] = 0.0
+            lx_out_[idx] = 0.0
+            lc_out_[idx] = 0.0
+
+            # upper bound
+
+            slope[idx] = u_in_[idx] / (u_in_[idx] - l_in_[idx])
+            slope = torch.clamp(slope, 0, 1)
+            ux_out_[idx] = slope[idx]
+            uc_out_[idx] = - slope[idx] * l_in_[idx]
+            u_out_[idx] = slope[idx] * u_in_[idx] - slope[idx] * l_in_[idx]
+
+        # append
+        l_out.append(l_out_)
+        u_out.append(u_out_)
+
+        return [l_out, u_out, lx_in, ux_in, lc_in, uc_in]
+
+
+class Conv2D_Peshal(nn.Module):
+    def __init__(self, layer):
+        super().__init__()
+        self.layer = layer
+        self.weights = layer.weight.data
+        self.mask = torch.sign(layer.weight.data)
+
+    def forward(self, input):
+        l_in, u_in, lx_in, ux_in, lc_in, uc_in = input
+
+        # Add batch dimension before passing through the network
+        l_in[-1] = l_in[-1].unsqueeze(0)
+        u_in[-1] = u_in[-1].unsqueeze(0)
+
+        l_out = l_in[:]
+        u_out = u_in[:]
+
+        mask_pos = torch.zeros_like(self.mask)
+        mask_neg = torch.zeros_like(self.mask)
+
+        mask_pos[self.mask > 1] = 1.0
+        mask_neg[self.mask < 1] = 1.0
+
+        weight_pos = mask_pos * self.weights
+        weight_neg = mask_neg * self.weights
+
+        self.layer.weight.data = weight_pos
+        l_pos = self.layer(l_in[-1]).squeeze(0)
+        u_pos = self.layer(u_in[-1]).squeeze(0)
+
+        self.layer.weight.data = weight_neg
+        l_neg = self.layer(l_in[-1]).squeeze(0)
+        u_neg = self.layer(u_in[-1]).squeeze(0)
+
+        # reset layer weights
+        self.layer.weight.data = self.weights
+
+        l_out_ = l_pos + u_neg + self.layer.bias.view(-1, 1, 1)
+        u_out_ = u_pos + l_neg + self.layer.bias.view(-1, 1, 1)
+
+        l_out.append(l_out_)
+        u_out.append(u_out_)
+
+        return [l_out, u_out, lx_in, ux_in, lc_in, uc_in]
 
 
 class Verifier(nn.Module):
@@ -389,16 +509,22 @@ def backsubstitution(input):
     return l_out_, u_out_
 
 
-def modLayer(layer):
-    layer_name = layer.__class__.__name__
+def modLayer(layer_prev, layer_cur):
+    if layer_cur.__class__.__name__ == 'ReLU' and layer_prev.__class__.__name__ == 'Linear':
+        layer_name = 'ReLU_Linear'
+    elif layer_cur.__class__.__name__ == 'ReLU' and layer_prev.__class__.__name__ == 'Conv2d':
+        layer_name = 'ReLU_Conv'
+    else:
+        layer_name = layer_cur.__class__.__name__
 
     modified_layers = {'Normalization': Normalization,
                        'Flatten': Flatten,
                        'Linear': Linear,
-                       'ReLU': ReLU,
+                       'ReLU_Linear': ReLU_Linear,
+                       'ReLU_Conv': ReLU_Linear,
                        'Conv2d': Conv2D}
 
     if layer_name not in modified_layers:
-        return copy.deepcopy(layer)
+        return copy.deepcopy(layer_cur)
 
-    return modified_layers[layer_name](layer)
+    return modified_layers[layer_name](layer_cur)
