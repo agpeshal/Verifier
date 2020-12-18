@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#for net in fc1 fc2 fc3 fc4 fc5 fc6 fc7
+# for net in fc1 fc2 fc3 fc4 fc5 fc6 fc7
 for net in conv1 conv2 conv3
 do
 	echo Evaluating network ${net}...

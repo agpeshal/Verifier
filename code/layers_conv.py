@@ -176,26 +176,38 @@ class ReLU(nn.Module):
         idx = torch.where((l_in_ < 0) & (u_in_ > 0))[0]
         if len(idx) > 0:
             # lower bound
-            lx_out_[idx] = 0.0
+            # lx_out_[idx] = 0.0
             lc_out_[idx] = 0.0
 
             # upper bound
             if not hasattr(self, 'slope'):
                 slope = torch.ones(n)
                 slope[idx] = u_in_[idx] / (u_in_[idx] - l_in_[idx])
+                # self.slope = torch.clamp(slope, 0, 1)
                 self.slope = Variable(torch.clamp(slope, 0, 1), requires_grad=True)
-
+                slope_lower = torch.ones(n)
+                self.slope_lower = Variable(torch.clamp(slope_lower, 0, 1), requires_grad=True)
+                # self.slope_lower = torch.clamp(slope_lower, 0, 1)
+                self.slope_learn = Variable(torch.stack((self.slope, self.slope_lower)))
+                
+            
             self.slope.data.clamp_(min=0, max=1)
             ux_out_[idx] = self.slope[idx]
+            # Compute Hinge and intercept
+            threshold = u_in_[idx] / (u_in_[idx] - l_in_[idx])
+            mask_lower = self.slope[idx] >= threshold
+            mask_upper = self.slope[idx] < threshold
+            # hinge_lower = torch.where(self.slope[idx] >= threshold)[0]
+            # hinge_upper = torch.where(self.slope[idx] < threshold)[0]
 
-            # threshold = u_in_[idx] / (u_in_[idx] - l_in_[idx])
-            # mask_pos = (self.slope[idx] >= threshold).float()
-            # mask_neg = (self.slope[idx] < threshold).float()
+            uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx]) * mask_upper + (- self.slope[idx] * l_in_[idx]) * mask_lower
 
-            # uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx]) * mask_neg + (- self.slope[idx] * l_in_[idx]) * mask_pos
-            uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx])
-            # uc_out_[idx] = (- self.slope[idx] * l_in_[idx])
+            # lx_out_[idx]  = self.get_lx(l=l_in_[idx], u=u_in_[idx], slope=self.slope[idx], hinge_lower=hinge_lower, hinge_upper=hinge_upper)
+            # lx_out_[idx] = 1
 
+            self.slope_lower.data.clamp_(min=0, max=1)
+            lx_out_[idx] = self.slope_lower[idx]
+            
         ##### lx_out, ux_out
         lx_out.append(torch.diag(lx_out_))
         ux_out.append(torch.diag(ux_out_))

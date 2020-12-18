@@ -21,9 +21,14 @@ class Model(nn.Module):
 
 
     def parameters(self):
+        params = []
         for layer in self.net:
             if isinstance(layer, ReLU) and hasattr(layer, 'slope'):
-                yield layer.slope
+                # yield layer.slope
+                params.append(layer.slope)
+                params.append(layer.slope_lower)
+        
+        return params
 
 
     # Calculates the gradient of `loss` wrt to ReLU slopes.
@@ -44,6 +49,7 @@ class Model(nn.Module):
     def verify(self, config):
         iterations = config.iterations
         lr = config.lr
+        iterations = 50
 
         # Initialize transformed network
         layers = self.get_layers()

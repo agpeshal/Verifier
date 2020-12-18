@@ -128,30 +128,41 @@ class ReLU(nn.Module):
         idx = torch.where((l_in_ < 0) & (u_in_ > 0))[0]
         if len(idx) > 0:
             # lower bound
-            lx_out_[idx] = 0.0
+            # lx_out_[idx] = 0.0
             lc_out_[idx] = 0.0
 
             # upper bound
             if not hasattr(self, 'slope'):
                 slope = torch.ones(n)
                 slope[idx] = u_in_[idx] / (u_in_[idx] - l_in_[idx])
+                # self.slope = torch.clamp(slope, 0, 1)
                 self.slope = Variable(torch.clamp(slope, 0, 1), requires_grad=True)
-                # self.slope.retain_grad()
+                slope_lower = torch.ones(n)
+                self.slope_lower = Variable(torch.clamp(slope_lower, 0, 1), requires_grad=True)
+                # self.slope_lower = torch.clamp(slope_lower, 0, 1)
+                self.slope_learn = Variable(torch.stack((self.slope, self.slope_lower)))
+                
             
             self.slope.data.clamp_(min=0, max=1)
             ux_out_[idx] = self.slope[idx]
-
+            # Compute Hinge and intercept
             threshold = u_in_[idx] / (u_in_[idx] - l_in_[idx])
-            # uc_out_[idx] = - self.slope[idx] * l_in_[idx]
+            mask_lower = self.slope[idx] >= threshold
+            mask_upper = self.slope[idx] < threshold
+            # hinge_lower = torch.where(self.slope[idx] >= threshold)[0]
+            # hinge_upper = torch.where(self.slope[idx] < threshold)[0]
 
-            mask_pos = (self.slope[idx] >= threshold).float()
-            mask_neg = (self.slope[idx] < threshold).float()
-            # mask_pos = torch.zeros_like(self.slope[idx])
-            # mask_neg = torch.ones_like(self.slope[idx])
+            uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx]) * mask_upper + (- self.slope[idx] * l_in_[idx]) * mask_lower
 
-            # uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx]) * mask_neg + (- self.slope[idx] * l_in_[idx]) * mask_pos
-            uc_out_[idx] = ((1 - self.slope[idx]) * u_in_[idx])
-            # uc_out_[idx] = (- self.slope[idx] * l_in_[idx])
+            # lx_out_[idx]  = self.get_lx(l=l_in_[idx], u=u_in_[idx], slope=self.slope[idx], hinge_lower=hinge_lower, hinge_upper=hinge_upper)
+            # lx_out_[idx] = 1
+
+            self.slope_lower.data.clamp_(min=0, max=1)
+            lx_out_[idx] = self.slope_lower[idx]
+
+            
+
+
 
         ##### lx_out, ux_out
         lx_out.append(torch.diag(lx_out_))
@@ -161,17 +172,43 @@ class ReLU(nn.Module):
         lc_out.append(lc_out_)
         uc_out.append(uc_out_)
 
-        ##### l_out, u_out
-        # l_out_, u_out_ = backsubstitution(input=[l_out, u_out, lx_out, ux_out, lc_out, uc_out])
-        # for i in range(len(u_out_)):
-        #     u_out_[i].clamp_(min=0, max=u_in_[i].item())
-
         l_out_ = torch.max(torch.zeros_like(l_in_), l_in_)
+        # l_out_ = l_in_ * lx_out_ + lc_out_
         u_out_ = u_in_ * ux_out_ + uc_out_
         l_out.append(l_out_)
         u_out.append(u_out_)
 
         return [l_out, u_out, lx_out, ux_out, lc_out, uc_out]
+
+    def get_lx(self, l, u, slope, hinge_lower, hinge_upper):
+        lx = torch.zeros_like(l)
+
+        base = (u[hinge_lower] - l[hinge_lower])
+        height = slope[hinge_lower] * (u[hinge_lower] - l[hinge_lower])
+        area_triangle = 0.5 * base * height
+
+        # trapezium area
+        height = (u[hinge_lower] - l[hinge_lower])
+        a = slope[hinge_lower] * (u[hinge_lower] - l[hinge_lower]) - u[hinge_lower]
+        b = -l[hinge_lower]
+        area_trapezium = 0.5 * height * (a + b)
+        
+        lx[hinge_lower] = (area_triangle > area_trapezium).float()
+        
+        height = (u[hinge_upper] - l[hinge_upper])
+        base = -l[hinge_upper] + slope[hinge_upper] * l[hinge_upper] + (1 - slope[hinge_upper]) * u[hinge_upper]
+        area_triangle = 0.5 * base * height
+
+        # trapezium area
+        height = (u[hinge_upper] - l[hinge_upper])
+        a = slope[hinge_upper] * l[hinge_upper] + (1-slope[hinge_upper]) * u[hinge_upper]
+        b = u[hinge_upper]
+        area_trapezium = 0.5 * height * (a + b)
+        lx[hinge_upper] = (area_triangle < area_trapezium).float()
+
+        return lx
+
+
 
 
 class Verifier(nn.Module):

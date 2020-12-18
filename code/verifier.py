@@ -41,6 +41,8 @@ def analyze(net, inputs, eps, true_label):
 
 def main():
     # Load network
+    # args.net = 'fc2'
+    # args.spec = '../test_cases/fc2/img1_0.07100.txt'
     if args.net == 'fc1':
         net = FullyConnected(DEVICE, INPUT_SIZE, [50, 10]).to(DEVICE)
     elif args.net == 'fc2':
