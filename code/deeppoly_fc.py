@@ -1,5 +1,6 @@
 from layers_fc import *
 torch.autograd.set_detect_anomaly(True)
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 INPUT_SIZE = 28
 NUM_CLASSES = 10
@@ -43,6 +44,7 @@ class Model(nn.Module):
         self.optimizer.zero_grad()
         loss.backward(retain_graph=True)
         self.optimizer.step()
+        self.scheduler.step(loss)
 
 
     def get_layers(self):
@@ -55,8 +57,8 @@ class Model(nn.Module):
     def verify(self, config):
         iterations = config.iterations
         lr = config.lr
-        iterations = 400
-        lr = 0.05
+        iterations = 800
+        lr = 0.2
 
         # Initialize transformed network
         layers = self.get_layers()
@@ -71,6 +73,8 @@ class Model(nn.Module):
         except:
             print('Nothing to optimize')
             return False
+
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=20, factor=0.5)
 
         for i in range(iterations):
             l, u, lx, ux, lc, uc = self.forward()
@@ -88,6 +92,6 @@ class Model(nn.Module):
 
             self.updateParams()
             # print('Iteration: {}, loss: {}'.format(i, -self.loss.item()), ' Time: ', round(time.time() - start_time, 2))
-            # print('Iteration: {}, loss: {}'.format(i, -self.loss.item()))
+            print('Iteration: {}, loss: {}'.format(i, -self.loss.item()))
 
 
