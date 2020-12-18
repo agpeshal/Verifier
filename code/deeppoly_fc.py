@@ -76,7 +76,8 @@ class Model(nn.Module):
         if int(config.net[-1]) > 3:
             self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=config.patience, factor=0.5)
 
-        for i in range(iterations):
+        while True:
+        #  for i in range(iterations):
             l, u, lx, ux, lc, uc = self.forward()
 
             # Penalize negative values (not verified)

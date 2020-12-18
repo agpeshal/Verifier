@@ -20,11 +20,11 @@ class Configuration:
               'fc3': 0.02,
               'fc4': 0.1,
               'fc5': 0.5,
-              'fc6': 0.5,
+              'fc6': 0.1,
               'fc7': 0.5,
               'conv1': 0.5,
-              'conv2': 0.5,
-              'conv3': 0.5}
+              'conv2': 1,
+              'conv3': 5}
 
         patience = {'fc1': 0,
               'fc2': 0,
@@ -33,9 +33,9 @@ class Configuration:
               'fc5': 5,
               'fc6': 5,
               'fc7': 5,
-              'conv1':1,
-              'conv2':2,
-              'conv3':3,
+              'conv1':3,
+              'conv2':1,
+              'conv3':1,
             }
 
         self.iterations = iterations[self.args.net]
