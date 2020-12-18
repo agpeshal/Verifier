@@ -19,14 +19,28 @@ class Configuration:
               'fc2': 0.02,
               'fc3': 0.02,
               'fc4': 0.1,
-              'fc5': 0.01,
-              'fc6': 0.01,
-              'fc7': 0.01,
+              'fc5': 0.5,
+              'fc6': 0.5,
+              'fc7': 0.5,
               'conv1': 0.5,
               'conv2': 0.5,
               'conv3': 0.5}
 
+        patience = {'fc1': 0,
+              'fc2': 0,
+              'fc3': 0,
+              'fc4': 0,
+              'fc5': 5,
+              'fc6': 5,
+              'fc7': 5,
+              'conv1':1,
+              'conv2':2,
+              'conv3':3,
+            }
+
         self.iterations = iterations[self.args.net]
         self.lr = lr[self.args.net]
+        self.patience = patience[self.args.net]
+        self.net = self.args.net
 
 

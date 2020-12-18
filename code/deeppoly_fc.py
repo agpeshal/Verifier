@@ -44,7 +44,6 @@ class Model(nn.Module):
         self.optimizer.zero_grad()
         loss.backward(retain_graph=True)
         self.optimizer.step()
-        self.scheduler.step(loss)
 
 
     def get_layers(self):
@@ -55,10 +54,10 @@ class Model(nn.Module):
 
 
     def verify(self, config):
-        iterations = config.iterations
+        # iterations = config.iterations
         lr = config.lr
-        iterations = 800
-        lr = 0.2
+        iterations = 500
+        # lr = 0.02
 
         # Initialize transformed network
         layers = self.get_layers()
@@ -73,8 +72,9 @@ class Model(nn.Module):
         except:
             print('Nothing to optimize')
             return False
-
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=20, factor=0.5)
+        
+        if int(config.net[-1]) > 3:
+            self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', patience=config.patience, factor=0.5)
 
         for i in range(iterations):
             l, u, lx, ux, lc, uc = self.forward()
@@ -91,7 +91,9 @@ class Model(nn.Module):
                 return True
 
             self.updateParams()
+            if int(config.net[-1]) > 3:
+                self.scheduler.step(-self.loss)
             # print('Iteration: {}, loss: {}'.format(i, -self.loss.item()), ' Time: ', round(time.time() - start_time, 2))
-            print('Iteration: {}, loss: {}'.format(i, -self.loss.item()))
+            # print('Iteration: {}, loss: {}'.format(i, -self.loss.item()))
 
 
