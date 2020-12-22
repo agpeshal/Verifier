@@ -4,7 +4,7 @@ from networks import FullyConnected, Conv
 
 import deeppoly_fc
 import deeppoly_conv
-from configuration import *
+from configuration import Configuration
 import warnings
 
 DEVICE = 'cpu'
@@ -30,7 +30,8 @@ def analyze(net, inputs, eps, true_label):
     elif 'conv' in args.net:
         model = deeppoly_conv.Model(net, eps=eps, x=inputs, true_label=true_label)
     del net
-
+    
+    # load configuration based on architecture
     config = Configuration(args=args)
 
     if model.verify(config):
@@ -41,8 +42,6 @@ def analyze(net, inputs, eps, true_label):
 
 def main():
     # Load network
-    # args.net = 'fc2'
-    # args.spec = '../test_cases/fc2/img1_0.07100.txt'
     if args.net == 'fc1':
         net = FullyConnected(DEVICE, INPUT_SIZE, [50, 10]).to(DEVICE)
     elif args.net == 'fc2':
