@@ -7,7 +7,6 @@ File `verifier.py` contains a template of verifier. Loading of the stored networ
 
 In folder `mnist_nets` you can find 10 neural networks (7 fully connected and 3 convolutional). These networks are loaded using PyTorch in `verifier.py`.
 In folder `test_cases` you can find 10 subfolders. Each subfolder is associated with one of the networks, using the same name. In a subfolder corresponding to a network, you can find 2 test cases for this network. 
-As explained in the lecture, these test cases **are not** part of the set of test cases which we will use for the final evaluation. 
 
 ## Setup instructions
 
