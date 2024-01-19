@@ -1,6 +1,3 @@
-# RIAI 2020 Course Project
-
-
 
 ## Folder structure
 In the directory `code` you can find 2 files. 
